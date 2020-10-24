@@ -1,0 +1,42 @@
+\documentclass[10pt]{article}
+
+\usepackage{fullpage}
+
+\title{COS 516: Class Project Outline\\
+\emph{Verified Counting Sort in Dafny}}
+
+\author{\emph{Josh Cohen}} 
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+
+Sorting algorithms are a common introductory example for verification tools; for instance, the Dafny git repo contains verified implementations of insertion sort, merge sort, and quick sort. These three algorithms, in particular, serve as common case studies because they demonstrate proofs via loop invariants (in the former case) and via induction (in the last two). Counting sort is a different algorithm that sorts integers in linear time by indexing into an array to count occurrences of each element. Dafny is a particularly good tool for verifying this algorithm (when compared with other functional correctness tools such as Coq) since it is heavily imperative and relies on arrays. As far as I can tell, this has not been verified in Dafny before, and its proof of correctness will look very different from that of other, comparison-based sorting algorithms. 
+
+\section{Proposed Work}
+
+This project aims to provide a verified counting sort implementation in Dafny. In particular, I will do the following:
+\begin{itemize}
+\item
+Provide a definition of sortedness
+\item
+Provide a definition of stability in a sort (ie, equivalent entries in the input array - which may have extra auxilliary data - are placed in the same order in the output)
+\item
+Implement counting sort
+\item
+Prove that counting sort results in a sorted array with the same elements as the input array
+\item
+Prove that counting sort is stable
+\end{itemize}
+I anticipate both the specification and proof of sortedness being simpler than those of stability, but it is difficult to tell for certain.
+\\
+\\I will provide the Dafny code which will give an implementation of counting sort, annotated so that the sortedness and stability conditions are verified, along with the project report.
+\\
+\\If I have time or if the verification proves simpler than expected, I may also verify radix sort, which uses counting sort as a subroutine.
+\section{Proposed Schedule}
+Within the next 1-2 weeks, I will begin by writing a preliminary version of the algorithm and specifications for sortedness and stability.
+\\By early November (before the presentation) I aim to at least have the proof of sortedness completed.
+\\Then, I will complete the proof of stability and write the final report.
+
+\end{document}
