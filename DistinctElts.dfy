@@ -88,6 +88,7 @@ requires(noDups(a))
 ensures(noDups_seq(a[..])) {
 }
 
+
 //Holy shit, it proved this automatically!
 lemma filter_lt_decompose(a: seq<int>, b : int)
 requires(0 < b)
@@ -383,6 +384,12 @@ ensures(numLeq(x, a) != numLeq(y,a)) {
 }
 */
 
+//general proofs about propositions
+lemma all_elems_seq_array<T>(a: array<T>, f : T -> bool)
+requires(forall x :: (x in a[..]) ==> f(x))
+ensures(forall i :: 0 <= i < a.Length ==> f(a[i])) {
+}
+
 method prefixSum (a:array<int>, b : array<int>) returns (c: array<int>)
 requires(0 < b.Length)
 requires(noDups(a))
@@ -443,6 +450,186 @@ ensures(forall j : int :: 0 <= j <= i - 1 ==> b[a[j]] != b[a[i]]) {
   }
 }
 
+//Results about permutations
+
+predicate permutation<T>(a: seq<T>, b : seq<T>) {
+  //multiset(a) == multiset(b)
+  seqSet(a) == seqSet(b)
+}
+
+//todo: move these lemmas about seqSet
+lemma {:induction a} seqSet_size_leq<T>(a: seq<T>)
+ensures(|seqSet(a)| <= |a|) {
+  if(|a| <= 0) {}
+  else {
+    assert(|a| == 1 + |a[1..]|);
+    assert(seqSet(a) == seqSet(a[1..]) + {a[0]});
+  }
+
+}
+
+lemma {:induction a} noDups_implies_size<T>(a: seq<T>)
+requires(noDups_seq(a))
+ensures(|a| == |seqSet(a)|) {
+  if(|a| <= 0) {
+  }
+  else {
+    assert(seqSet(a) == seqSet(a[1..]) + {a[0]});
+    //assert (!(a[0] in a[1..]));
+  }
+}
+
+lemma {:induction a} size_implies_noDups<T>(a: seq<T>)
+requires(|a| == |seqSet(a)|)
+ensures(noDups_seq(a)) {
+  if (|a| <= 0) {
+  }
+  else {
+    assert(seqSet(a) == seqSet(a[1..]) + {a[0]});
+    if(a[0] in a[1..]) {
+      seqSet_size_leq(a[1..]);
+    }
+    else {
+    }
+  }
+}
+
+lemma noDups_perm(a: seq<int>, b: seq<int>)
+requires(permutation(a, b))
+requires(noDups_seq(a))
+requires(|a| == |b|)
+ensures(noDups_seq(b)) {
+  noDups_implies_size(a);
+  size_implies_noDups(b);  
+}
+
+lemma perm_sym<T>(a: seq<T>, b : seq<T>)
+requires(permutation(a,b))
+ensures(permutation(b,a)) {
+
+}
+
+lemma perm_in<T>(a: seq<T>, b : seq<T>) 
+requires(permutation(a, b))
+ensures(forall x :: x in b ==> x in a) {
+  forall x | x in b 
+  ensures (x in a) {
+    assert(x in seqSet(b));
+  }
+}
+lemma perm_preserves_preds<T>(a: seq<T>, b: seq<T>, f: T -> bool)
+requires(permutation(a, b))
+requires(forall x :: x in a ==> f(x))
+ensures(forall x :: x in b ==> f(x)) {
+  perm_in(a, b);
+ }
+/*
+ lemma perm_preserves_filter<T>(a: seq<T>, b: seq<T>, f : T -> bool)
+ decreases (|a|)
+ requires(permutation(a,b))
+ requires(|a| == |b|)
+ ensures(|filter(a, f)| == |filter(b, f)|) {
+   if(|a| <= 0) {}
+   else {
+     if(f(a[0])) {
+       assert (filter(a, f) == [a[0]] + filter(a[1..], f));
+       assert(|filter(a, f)| == 1 + |filter(a[1..], f)|);
+       if(f(b[0])) {
+          assert (filter(b, f) == [b[0]] + filter(b[1..], f));
+          assert (|filter(b, f)| == 1 + |filter(b[1..], f)|);
+          assert(|a[1..]| == |b[1..]|);
+          perm_preserves_filter(a[1..], b[1..], f);
+          //assert((|filter(a[1..], f)| == |filter(b[1..], f)|));
+       }
+       else {
+
+       }
+
+     }
+     else {
+
+     }
+   }
+ }
+ */
+
+//need to be able to reason about position in c rather than a - ie, numLeq respects permutations
+lemma {:induction x} numLt_perm(a: seq<int>, b: seq<int>, x : int)
+requires (permutation(a, b))
+requires (|a| == |b|)
+requires(noDups_seq(a))
+requires(forall x : int :: x in a ==> x >= 0)
+ensures(numLt(x, a) == numLt(x, b)) {
+  perm_in(a, b);
+  perm_in(b,a);
+}
+//didnt actually need all those permutation lemmas
+
+
+//need to be able to reason about position in c rather than a - ie, numLeq respects permutations
+lemma numLeq_perm(a: seq<int>, b: seq<int>, x : int)
+requires (permutation(a, b))
+requires (|a| == |b|)
+requires(noDups_seq(a))
+requires(forall x : int :: x in a ==> x >= 0)
+ensures(numLeq(x, a) == numLeq(x, b)) {
+  numLt_perm(a, b, x);
+  perm_in(a,b);
+  perm_in(b,a);
+  /*
+  noDups_perm(a, b);
+  numLeq_equiv(x, a);
+  perm_preserves_preds(a, b, y => y >= 0);
+  numLeq_equiv(x, b); */
+
+}
+
+predicate sorted(a: seq<int>) {
+  forall i : int, j : int :: 0 <= i < |a| ==> 0 <= j < |a| && i <= j ==> a[i] <= a[j]
+}
+
+/*equivalent sorting condition - if every element is at its correct position in the array, then the array is sorted
+  (requires noDups, otherwise there is ambiguity)*/
+predicate sorted_alt(a:seq<int>) {
+  forall i : int :: 0 <= i < |a| ==> i == numLeq(a[i], a[..]) - 1
+}
+
+lemma sorted_alt_implies_sorted(a: seq<int>)
+requires(noDups_seq(a))
+requires(sorted_alt(a))
+requires(forall x : int :: x in a ==> x >= 0)
+ensures(sorted(a)) {
+  forall i : int, j : int | 0 <= i < |a| && 0 <= j < |a| && i <= j
+    ensures(a[i] <= a[j]) {
+      if(a[j] < a[i]) {
+        numLeq_lt_trans(a, a[j], a[i]);
+      }
+      else {
+      }
+    }
+}
+
+lemma sorted_alt_seq_array(a: array<int>) 
+requires(forall i : int :: 0 <= i < a.Length ==> i == numLeq(a[i], a[..]) - 1)
+ensures(sorted_alt(a[..])){
+}
+
+//the final (hopefully) condition we need: 
+lemma sorted_alt_perm(a : array<int>, b : array<int>)
+requires(forall i : int :: 0 <= i < a.Length ==> a[i] >= 0)
+requires(permutation(a[..],b[..]))
+requires(|a[..]| == |b[..]|)
+requires(noDups(a))
+requires(forall j : int :: 0 <= j < b.Length ==> j == numLeq(b[j], a[..]) - 1)
+ensures((forall j : int :: 0 <= j < b.Length ==> j == numLeq(b[j], b[..]) - 1))  {
+  forall j | 0 <= j < b.Length
+  ensures (j == numLeq(b[j], b[..]) - 1) {
+    numLeq_perm(a[..], b[..], b[j]);
+
+  }
+
+}
+
 
 
 //a is the original array, b is prefix sum array
@@ -451,8 +638,9 @@ requires(noDups(a))
 //requires(a.Length > 0)
 requires(forall i : int {:induction i} :: 0 <= i < b.Length ==> (b[i] == numLeq(i, a[..]) - 1));
 requires(forall i : int :: 0 <= i < a.Length ==> 0 <= a[i] < b.Length)
-ensures(seqSet(a[..]) == seqSet(c[..]))
-//TODO: fill in postconditions
+ensures(permutation(a[..], c[..]))
+ensures(sorted(c[..]))
+ensures(c.Length == a.Length)
 {
   var blen := b.Length;
   c := new int[a.Length](i => -1);
@@ -487,7 +675,7 @@ ensures(seqSet(a[..]) == seqSet(c[..]))
   invariant(forall j: int:: 0 <= j <= i ==> c[b[a[j]]] == -1) //what we haven't done yet
   invariant(|filter(c[..], y => y >= 0)| == a.Length - (i + 1)); //ensures that we fill all of c
   //invariant(noDups_seq (filter(c[..], y => y >= 0)))
-  invariant(seqSet(a[(i+1)..a.Length]) == seqSet(filter(c[..], y => y >= 0))) //permutation invariant
+  invariant(permutation((a[(i+1)..a.Length]),(filter(c[..], y => y >= 0)))) //permutation invariant
   invariant(forall j : int :: 0 <= j < c.Length ==> c[j] != -1 ==> j == numLeq(c[j], a[..]) - 1) //sorting invariant
   {
 
@@ -548,12 +736,30 @@ ensures(seqSet(a[..]) == seqSet(c[..]))
   //Now:prove that the invariants imply the properties we want
   //First, permutation:
   assert(a[..] == a[0..a.Length]);
-  assert(seqSet(a[..]) == seqSet(filter(c[..], y => y >= 0))); //permutation invariant
+  assert(permutation((a[..]),(filter(c[..], y => y >= 0)))); //permutation invariant
   //assert((forall j: int:: 0 <= j < a.Length ==> c[b[a[j]]] >= 0));
   //assert((|filter(c[..], y => y >= 0)| == c.Length));
+  assert(|filter(c[..], y => y >= 0)| == a.Length); //ensures that we fill all of c
+  assert(|a[..]| == a.Length);
   filter_same_length_all(c[..], y => y >= 0);
   filterAll(c[..], y => y >= 0);
   assert(filter(c[..], y => y >= 0) == c[..]);
+  // sorted invariant - first we prove the alternate condition
+  assert(forall x :: (x in c[..]) ==> x >= 0);
+  all_elems_seq_array(c, y => y >= 0);
+  assert(forall j : int :: 0 <= j < c.Length ==> c[j] >= 0);
+  assert(forall j : int :: 0 <= j < c.Length ==> c[j] != -1);
+  //assert(sorted_alt(c[..]));
+  assert(forall j : int :: 0 <= j < c.Length ==> j == numLeq(c[j], a[..]) - 1); //sorting 
+  sorted_alt_perm(a, c); //c satisfied sorted_alt condition
+  //numLeq_perm()
+  sorted_alt_seq_array(c); //c[..] satsifes sorted_alt condition
+  noDups_arr_to_seq(a); //a[..] has no duplicates
+  noDups_perm(a[..], c[..]); // c[..] has no duplicates
+  sorted_alt_implies_sorted(c[..]); //c[..] is sorted
+  //all_elems_array_seq(c, y ==>)
+  //assert(sorted_alt(c[..]));
+
   return c;
 }
 
