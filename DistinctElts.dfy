@@ -598,3 +598,23 @@ ensures(c.Length == a.Length)
   sorted_alt_implies_sorted(c[..]); //c[..] is sorted
   return c;
 }
+
+
+//Our final counting sort method for arrays with no duplicates
+method countingSort(a: array<int>, k : int) returns (s: array<int>)
+requires(0 < k)
+requires(noDups(a))
+requires (forall i: int :: 0 <= i < a.Length ==> 0 <= a[i] < k)
+ensures(sorted(s[..]))
+ensures(permutation(a[..], s[..]))
+ensures(s.Length == a.Length)
+{
+  if(a.Length == 0) {
+    s := a;
+  }
+  else {
+    var b := countOccurrences(a, k);
+    var c := prefixSum(a, b);
+    s := constructSortedArray(a, c);
+  }
+}
