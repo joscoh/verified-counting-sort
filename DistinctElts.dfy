@@ -159,7 +159,6 @@ ensures(numLt(x, a) == numLt_alt(x,a)) {
         filterEmpty(a, y => y == (x - 1));
         numLt_alt_minus(x, a);
       }
-
     }
 }
 
@@ -171,6 +170,11 @@ ensures(numLt(x, a) == numLt_alt(x,a)) {
 
 function seqSet<T>(a: seq<T>) : set<T> {
     set x : T | x in a
+}
+
+lemma seq_set_app<T>(a: seq<T>, b : seq<T>)
+ensures(seqSet(a + b) == seqSet(a) + seqSet(b)) {
+
 }
 /*
 function noDups(a: seq<int>) : bool
@@ -268,7 +272,6 @@ requires(noDups(a))
 requires(forall i : int :: 0 <= i < b.Length ==> b[i] == (if i in a[..] then 1 else 0))
 ensures(c.Length == b.Length)
 ensures(forall i : int {:induction i} :: 0 <= i < b.Length ==> (c[i] == numLeq(i, a[..])));
-ensures(noDups(c))
 {
   var i := 1;
   assert(numLeq(0, a[..]) == b[0]);
@@ -284,7 +287,7 @@ ensures(noDups(c))
     i := i + 1;
   }
 }
-/*
+
 //a is the original array, b is prefix sum array
 method constructSortedArray (a: array<int>, b: array<int>) returns (c : array<int>)
 requires(noDups(a))
@@ -315,33 +318,70 @@ requires(forall i : int :: 0 <= i < a.Length ==> 0 <= a[i] < b.Length)
   assert(filter(c[..], y => y >= 0) == []);
   assert(seqSet(a[(i+1)..a.Length]) == seqSet(filter(c[..], y => y >= 0)));
   //assume((forall j: int :: 0 <= i < a.Length ==> 0 <= b[a[j]] < c.Length));\
-  assume(forall j: int :: 0 <= j < b.Length ==> 0 <= b[j] < c.Length);
+  assume(forall j: int :: 0 <= j < b.Length ==> 0 <= b[j] < c.Length); // TODO
   assert((forall j: int:: 0 <= j <= i ==> c[b[a[j]]] == -1));
 
   while(i >= 0)
   invariant(-1 <= i < a.Length)
   invariant(forall j: int ::i < j < a.Length ==> 0 <= b[a[j]] < c.Length)
-  invariant(forall j: int:: i < j < a.Length ==> c[b[a[j]]] != -1)
+  invariant(forall j: int:: i < j < a.Length ==> c[b[a[j]]] >= 0)
   invariant(forall j: int:: 0 <= j <= i ==> c[b[a[j]]] == -1)
+  //invariant(noDups_seq (filter(c[..], y => y >= 0)))
   invariant(seqSet(a[(i+1)..a.Length]) == seqSet(filter(c[..], y => y >= 0)))
   {
 
     assert(0 <= i < a.Length);
     assert(0 <= a[i] < b.Length);
     assume(0 <= b[a[i]] < c.Length);
+    //permutation invar
     assert(seqSet(a[i..a.Length]) == seqSet(a[(i+1)..a.Length]) + {a[i]} );
+    assert(c[..] == (c[0..b[a[i]]] + [c[b[a[i]]]])+ c[b[a[i]] + 1..c.Length]);
+    assert(c[b[a[i]]] == -1);
+    filter_app(c[0..b[a[i]]] + [c[b[a[i]]]], c[b[a[i]] + 1..c.Length], y => y >= 0);
+    filter_app(c[0..b[a[i]]], [c[b[a[i]]]], y => y >= 0);
+    assert(filter(c[..], y => y >= 0) == 
+      filter(c[0..b[a[i]]], y => y >= 0) + 
+      filter([c[b[a[i]]]], y => y >= 0) +
+      filter(c[b[a[i]] + 1..c.Length], y => y >= 0));
+    filterEmpty([c[b[a[i]]]], y => y >= 0);
+    //this says that we can ignore the b[a[i]]th element when considering the previous c
+    assert(filter(c[..], y => y >= 0) == 
+      filter(c[0..b[a[i]]], y => y >= 0) + 
+      filter(c[b[a[i]] + 1..c.Length], y => y >= 0));
+    
+
     assert(a[i] != -1);
     assert(forall j: int:: 0 <= j <= i - 1 ==> c[b[a[j]]] == -1);
-    assert(forall j : int :: 0 <= j < i - 1 ==> b[a[j]] != b[a[i]]);
+    //idea: noDups: i <> j -> a[i] <> a[j], so then by (injectivity), b[a[i]] <> b[a[j]]
+    assume(forall j : int :: 0 <= j <= i - 1 ==> b[a[j]] != b[a[i]]); // TODO; solve this goal
+    //assert(forall j : int :: 0 <= j <= i - 1 ==> c[b[a[j]]] == -1);
     c[b[a[i]]] := a[i];
-    assert(forall j: int:: 0 <= j <= i - 1 ==> c[b[a[j]]] == -1);
+    //also need to know that c[b[a[j]] <> c[b[a[i]]] - filtered part has nodups
+    assert(forall j: int:: 0 <= j <= i - 1 ==> b[a[j]] != b[a[i]] ==> c[b[a[j]]] == -1);
+    assert(forall j: int:: 0 <= j <= i - 1 ==> b[a[j]] != b[a[i]]);
+
+    //filter invariant
+    assert(filter([c[b[a[i]]]], y => y >= 0) == [c[b[a[i]]]]);
+    assert(filter([c[b[a[i]]]], y => y >= 0) == [a[i]]);
+    assert(c[..] == (c[0..b[a[i]]] + [c[b[a[i]]]])+ c[b[a[i]] + 1..c.Length]);
+    filter_app(c[0..b[a[i]]] + [c[b[a[i]]]], c[b[a[i]] + 1..c.Length], y => y >= 0);
+    filter_app(c[0..b[a[i]]], [c[b[a[i]]]], y => y >= 0);
+
+    assert(filter(c[..], y => y >= 0) == 
+      filter(c[0..b[a[i]]], y => y >= 0) + 
+      filter([c[b[a[i]]]], y => y >= 0) +
+      filter(c[b[a[i]] + 1..c.Length], y => y >= 0));
+    //now the proof goes through!
+
 
     //assert(c[..] == c[0..b[a[i]]] + c[b[a[i]]..]);
     //assert(c[b[a[i]]..] == [c[b[a[i]]]] + c[b[a[i]] + 1..]);
-    assert(c[..] == c[0..b[a[i]]] + [c[b[a[i]]]] + c[b[a[i]] + 1..]);
+    //assert(c[..] == c[0..b[a[i]]] + [c[b[a[i]]]] + c[b[a[i]] + 1..]);
     //assert(seqSet(filter(c[..], y => y >= 0)) == seqSet(filter(c[0..b[a[i]]], y => y >= 0)))
     i := i - 1;
   }
+  //todo:follows from above
+  //assert(seqSet(a[..]) == seqSet(c[..]));
   
 /*
   while(i >= 0)
