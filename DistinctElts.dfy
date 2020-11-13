@@ -111,6 +111,31 @@ ensures(filter(a, f) == []) {
 
 }
 
+lemma filterAll<T>(a: seq<T>, f : T -> bool)
+requires(forall x : T :: x in a ==> f(x))
+ensures(filter(a, f) == a) {
+
+}
+
+lemma filter_length_leq<T>(a: seq<T>, f: T -> bool)
+ensures(|filter(a, f)| <= |a|) {
+
+}
+
+lemma {:induction a} filter_same_length_all<T>(a:seq<T>, f: T -> bool)
+requires(|filter(a, f)| == |a|)
+ensures(forall x : T :: x in a ==> f(x)) {
+  if (|a| <= 0) {
+  }
+  else {
+    if(f(a[0])) {
+    }
+    else {
+      filter_length_leq(a[1..], f);
+    }
+  }
+}
+
 lemma {: induction a} filter_eq_nodups(a:seq<int>, x : int)
 requires(noDups_seq(a))
 ensures(|filter(a, y => y == x)| == if (x in a) then 1 else 0) {
@@ -210,10 +235,7 @@ ensures(1 <= numLeq(x,a)) {
   numLt_nonneg(x, a);
 }
 
-lemma filter_length_leq<T>(a: seq<T>, f: T -> bool)
-ensures(|filter(a, f)| <= |a|) {
 
-}
 
 lemma numLeq_upper_bound(x: int, a : seq<int>)
 requires(forall x : int :: x in a ==> x >= 0)
@@ -429,7 +451,7 @@ requires(noDups(a))
 //requires(a.Length > 0)
 requires(forall i : int {:induction i} :: 0 <= i < b.Length ==> (b[i] == numLeq(i, a[..]) - 1));
 requires(forall i : int :: 0 <= i < a.Length ==> 0 <= a[i] < b.Length)
-
+ensures(seqSet(a[..]) == seqSet(c[..]))
 //TODO: fill in postconditions
 {
   var blen := b.Length;
@@ -460,11 +482,13 @@ requires(forall i : int :: 0 <= i < a.Length ==> 0 <= a[i] < b.Length)
   while(i >= 0)
   decreases (i-0)
   invariant(-1 <= i < a.Length)
-  invariant(forall j: int ::i < j < a.Length ==> 0 <= b[a[j]] < c.Length)
-  invariant(forall j: int:: i < j < a.Length ==> c[b[a[j]]] >= 0)
-  invariant(forall j: int:: 0 <= j <= i ==> c[b[a[j]]] == -1)
+  invariant(forall j: int ::i < j < a.Length ==> 0 <= b[a[j]] < c.Length) //bounds safety
+  invariant(forall j: int:: i < j < a.Length ==> c[b[a[j]]] >= 0) //what we've done
+  invariant(forall j: int:: 0 <= j <= i ==> c[b[a[j]]] == -1) //what we haven't done yet
+  invariant(|filter(c[..], y => y >= 0)| == a.Length - (i + 1)); //ensures that we fill all of c
   //invariant(noDups_seq (filter(c[..], y => y >= 0)))
-  invariant(seqSet(a[(i+1)..a.Length]) == seqSet(filter(c[..], y => y >= 0)))
+  invariant(seqSet(a[(i+1)..a.Length]) == seqSet(filter(c[..], y => y >= 0))) //permutation invariant
+  invariant(forall j : int :: 0 <= j < c.Length ==> c[j] != -1 ==> j == numLeq(c[j], a[..]) - 1) //sorting invariant
   {
 
     assert(0 <= i < a.Length);
@@ -511,6 +535,9 @@ requires(forall i : int :: 0 <= i < a.Length ==> 0 <= a[i] < b.Length)
       filter(c[b[a[i]] + 1..c.Length], y => y >= 0));
     //now the proof goes through!
 
+    //sorting invariant
+    assert(b[a[i]] == numLeq(c[b[a[i]]], a[..]) - 1);
+
 
     //assert(c[..] == c[0..b[a[i]]] + c[b[a[i]]..]);
     //assert(c[b[a[i]]..] == [c[b[a[i]]]] + c[b[a[i]] + 1..]);
@@ -518,6 +545,18 @@ requires(forall i : int :: 0 <= i < a.Length ==> 0 <= a[i] < b.Length)
     //assert(seqSet(filter(c[..], y => y >= 0)) == seqSet(filter(c[0..b[a[i]]], y => y >= 0)))
     i := i - 1;
   }
+  //Now:prove that the invariants imply the properties we want
+  //First, permutation:
+  assert(a[..] == a[0..a.Length]);
+  assert(seqSet(a[..]) == seqSet(filter(c[..], y => y >= 0))); //permutation invariant
+  //assert((forall j: int:: 0 <= j < a.Length ==> c[b[a[j]]] >= 0));
+  //assert((|filter(c[..], y => y >= 0)| == c.Length));
+  filter_same_length_all(c[..], y => y >= 0);
+  filterAll(c[..], y => y >= 0);
+  assert(filter(c[..], y => y >= 0) == c[..]);
+  return c;
+}
+
   //todo:follows from above
   //assert(seqSet(a[..]) == seqSet(c[..]));
   
@@ -548,8 +587,6 @@ requires(forall i : int :: 0 <= i < a.Length ==> 0 <= a[i] < b.Length)
     i := i - 1;
   }
   */
-
-}
 
 /*
 method countOccurrences (a : array<int>, len : int, k : int) returns (b: array<int>)
