@@ -66,7 +66,6 @@ ensures(forall x : T :: x in a ==> f(x)) {
 //Proofs about filtering int lists by lt/leq/eq relations
 
 lemma {:induction a} filter_lt_decompose(a: seq<int>, b : int)
-requires(0 < b)
 ensures(|filter(a, y => y < b)| == |filter(a, y => y < b - 1)| + |filter(a, y => y == b - 1)|) {
 }
 
@@ -74,23 +73,9 @@ lemma {:induction a} filter_leq_decompose(a: seq<int>, x : int)
 ensures(|filter(a, y => y <= x)| == |filter(a, y => y < x)| + |filter(a, y => y == x)|) {
 }
 
-//TODO: wont need this
-lemma {: induction a} filter_eq_nodups(a:seq<int>, x : int)
-requires(noDups_seq(a))
-ensures(|filter(a, y => y == x)| == if (x in a) then 1 else 0) {
-}
+lemma filter_lt_leq_minus_one(a: seq<int>, x : int)
+ensures(filter(a, y => y < x) == filter(a, y => y <= x - 1)) {
 
-//for some reason Dafny cannot prove this from above
-lemma {: induction a} filter_eq_nodups_minus(a:seq<int>, x : int)
-requires(noDups_seq(a))
-ensures(|filter(a, y => y == x-1)| == if (x-1 in a) then 1 else 0) {
-}
-
-lemma {: induction a} filter_length_nodups(a: seq<int>, x : int)
-requires((x-1) in a)
-requires(noDups_seq(a))
-ensures(|filter(a, y => y == (x - 1))| == 1) {
-  filter_eq_nodups_minus(a, x);
 }
 
 lemma {:induction a} filter_bounded_in(a:seq<int>, x : int, y : int)
@@ -108,62 +93,58 @@ ensures (|filter(a, z => z <= y)| == |filter(a, z => z <= x)| + |filter(a, z => 
   used to specify the correct position of the element in a sorted array */
 
 //We provide 2 equivalent definitions (TODO: change) - first, an inductive one
-function numLt(x: int, a : seq<int>) : int
-decreases x
-{
-  if x < 1 then 0 else
-  if (x-1) in a then 1 + numLt(x-1, a) else numLt(x-1, a)
+
+function numLt(x: int, a : seq<int>) : int {
+  |filter(a, y => y < x)|
+}
+
+function numEq(x: int, a : seq<int>) : int {
+  |filter(a, y => y == x)|
 }
 
 function numLeq(x: int, a : seq<int>) : int {
-    numLt(x, a) + (if x in a then 1 else 0)
+  numLt(x, a) + numEq(x, a)
 }
 
-//Now, a definition based on filter
-function numLt_alt(x: int, a : seq<int>) : int{
-    |filter(a, y => y < x)|
+//Dafny cannot infer this automatically and cannot even infer from generic versions
+//(parameterized by x) - this is a very annoying limitation
+lemma numLt_unfold_zero(a : seq<int>) 
+ensures(numLt(0, a) == |filter(a, y => y < 0)|) {}
+lemma numEq_minus_one(x: int, a : seq<int>)
+ensures(numEq(x-1, a) == |filter(a, y => y == x-1)|) {
 }
 
-function numLeq_alt(x: int, a : seq<int>) : int {
-  |filter(a, y => y <= x)|
+lemma numLt_minus_one(x: int, a : seq<int>)
+ensures(numLt(x-1, a) == |filter(a, y => y < x-1)|) {
 }
 
-//Proofs of equivalence between the two versions
 
-//need this small lemma
-lemma {: induction a} numLt_alt_minus(x: int, a : seq<int>)
-ensures(numLt_alt(x-1, a) == |filter (a, y => y < x - 1)|) {
+
+
+
+//Some alternate characterizations that make some things easier
+lemma numLeq_direct(x:int, a : seq<int>) 
+ensures(numLeq(x, a) == |filter(a, y => y <= x)|) {
 }
 
-lemma {: induction x} numLt_equiv(x: int, a : seq<int>)
-requires(forall x : int :: x in a ==> x >= 0)
-requires(noDups_seq(a))
-ensures(numLt(x, a) == numLt_alt(x,a)) {
-  assert( numLt_alt(x,a) == |filter(a, y => y < x)|);
-    if(x < 1) {
-      filterEmpty(a, y => y < x);
-    }
-    else {
-      if((x-1) in a) {
-        filter_lt_decompose(a, (x));
-        filter_length_nodups(a, x);
-        numLt_alt_minus(x, a);
-      }
-      else {
-        filter_lt_decompose(a, (x));
-        filterEmpty(a, y => y == (x - 1));
-        numLt_alt_minus(x, a);
-      }
-    }
+lemma {: induction x} numLt_ind(x: int, a : seq<int>)
+ensures(numLt(x, a) == numEq(x-1, a) + numLt(x-1, a)) {
+  numEq_minus_one(x, a);
+  numLt_minus_one(x, a);
+  filter_lt_decompose(a, x);
 }
 
-lemma {: induction x} numLeq_equiv(x: int, a : seq<int>)
-requires(forall x : int :: x in a ==> x >= 0)
-requires(noDups_seq(a))
-ensures(numLeq(x, a) == numLeq_alt(x,a)) {
-  numLt_equiv(x, a);
+lemma numLt_leq_minus_one(x: int, a : seq<int>)
+ensures(numLt(x, a) == numLeq(x-1, a)) {
+  numLt_ind(x, a);
+}
+
+lemma numLeq_ind(x: int, a : seq<int>) 
+ensures(numLeq(x,a) == numLeq(x-1, a) + numEq(x, a)) {
+  numLeq_direct(x, a);
+  assert(numLeq(x,a) == |filter(a, y => y <= x)|);
   filter_leq_decompose(a, x);
-  filter_eq_nodups(a, x);
+  numLt_leq_minus_one(x, a);  
 }
 
 /* Bounds on [numLeq] - needed for bounds checks in counting sort */
@@ -171,17 +152,29 @@ lemma {:induction x} numLt_nonneg(x: int, a : seq<int>)
 ensures(0 <= numLt(x,a)) {
 }
 
+lemma {:induction a} numEq_in_pos(x: int, a : seq<int>)
+requires (x in a)
+ensures (numEq(x, a) > 0) {
+  if(|a| <= 0) {}
+  else {
+    if(a[0] == x) {
+    }
+    else {
+      assert(x in a[1..]);
+    }
+  }
+}
+
 lemma numLeq_nonneg(x: int, a : seq<int>)
 requires (x in a)
 ensures(1 <= numLeq(x,a)) {
   numLt_nonneg(x, a);
+  numEq_in_pos(x, a);
 }
 
 lemma numLeq_upper_bound(x: int, a : seq<int>)
-requires(forall x : int :: x in a ==> x >= 0)
-requires (noDups_seq(a))
 ensures(numLeq(x, a) <= |a|) {
-  numLeq_equiv(x, a);
+  numLeq_direct(x, a);
   filter_length_leq(a, y => y <= x);
 }
 
@@ -191,11 +184,9 @@ ensures(numLeq(x, a) <= |a|) {
 lemma numLeq_lt_trans(a:seq<int>, x: int, y: int)
 requires(x < y)
 requires(y in a)
-requires(forall x : int :: x in a ==> x >= 0)
-requires(noDups_seq(a))
 ensures(numLeq(x, a) < numLeq(y, a)) {
-  numLeq_equiv(x, a);
-  numLeq_equiv(y, a);
+  numLeq_direct(y, a);
+  numLeq_direct(x, a);
   filter_leq_decompose_bounds(a, x, y);
   filter_bounded_in(a, x, y);
 }
@@ -204,8 +195,6 @@ lemma numLeq_inj(a:seq<int>, x : int, y : int)
 requires(x != y)
 requires(x in a)
 requires (y in a)
-requires(forall x : int :: x in a ==> x >= 0)
-requires(noDups_seq(a))
 ensures(numLeq(x, a) != numLeq(y, a)) {
   if(x < y) {
     numLeq_lt_trans(a, x, y);
@@ -315,18 +304,71 @@ ensures(forall x :: x in b ==> x in a) {
 
 /* proofs about [numLt] and [numLeq] with permutations */
 
+//This is special for noDups - in the general case we need to reason about multisets
+lemma numEq_noDups(a:seq<int>, x: int)
+requires(noDups_seq(a))
+ensures(numEq(x, a) == (if x in a then 1 else 0)) {
+  if(|a| <= 0) {}
+  else {
+    numEq_noDups(a[1..], x);
+  }
+}
+
+//numEq is preserved over permutations (trivial for noDups)
+lemma numEq_perm(a:seq<int>, b : seq<int>, x : int)
+requires(permutation(a,b))
+requires(|a| == |b|)
+requires(noDups_seq(a))
+ensures(numEq(x, a) == numEq(x, b)) {
+  numEq_noDups(a, x);
+  noDups_perm(a, b);
+  numEq_noDups(b, x);
+  //NOTE: in real proof, need to reason about filter more directly
+  perm_in(a,b);
+  perm_in(b, a);
+}
+
 //numLt is preseved over permutations
+
+//The more general version of this uses filter, but we will do that later
+lemma perm_preserve_pred<T>(a:seq<T>, b:seq<T>, f: T -> bool)
+requires(permutation(a, b))
+requires(|a| == |b|)
+requires(noDups_seq(a))
+requires(forall x :: x in a ==> f(x))
+ensures(forall x :: x in b ==> f(x)) {
+  forall x | x in b {
+    perm_in(a, b);
+  }
+}
+
+//This is really true without the lower bound but it is much easier to prove this way, and it is OK because all elts are positive anyway
 lemma {:induction x} numLt_perm(a: seq<int>, b: seq<int>, x : int)
 requires (permutation(a, b))
 requires (|a| == |b|)
 requires(noDups_seq(a))
-requires(forall x : int :: x in a ==> x >= 0)
+requires(forall x :: x in a ==> x >= 0)
 ensures(numLt(x, a) == numLt(x, b)) {
-  perm_in(a, b);
-  perm_in(b,a);
+  if(x <= 0) {
+    filterEmpty(a, y => y < x);
+    perm_preserve_pred(a, b, y => y >= 0);
+    filterEmpty(b, y => y < x);
+  }
+  else {
+    numLt_ind(x, a);
+    numLt_ind(x, b);
+    numLt_perm(a, b, x-1);
+    assert(numLt(x, a) == |filter(a, y => y < x)|);
+    assert(numLt(x, b) == |filter(b, y => y < x)|);
+    numEq_perm(a, b, x-1);
+    assert(numEq(x-1, a) == numEq(x-1, b));
+    perm_in(a, b);
+    perm_in(b,a);
+  }
+  
 }
 
-//as is numLeq
+//numLeq is also preserved over permutations
 lemma numLeq_perm(a: seq<int>, b: seq<int>, x : int)
 requires (permutation(a, b))
 requires (|a| == |b|)
@@ -334,6 +376,7 @@ requires(noDups_seq(a))
 requires(forall x : int :: x in a ==> x >= 0)
 ensures(numLeq(x, a) == numLeq(x, b)) {
   numLt_perm(a, b, x);
+  numEq_perm(a, b, x);
   perm_in(a,b);
   perm_in(b,a);
 }
@@ -352,6 +395,7 @@ requires(forall x :: (x in a[..]) ==> f(x))
 ensures(forall i :: 0 <= i < a.Length ==> f(a[i])) {
 }
 
+
 /* Sortedness - two equivalent definitions */
 
 //A sequence is sorted if the expected condition is satisfied - ie, if i <= j, a[i] <= a[j]
@@ -369,7 +413,6 @@ predicate sorted_alt(a:seq<int>) {
 lemma sorted_alt_implies_sorted(a: seq<int>)
 requires(noDups_seq(a))
 requires(sorted_alt(a))
-requires(forall x : int :: x in a ==> x >= 0)
 ensures(sorted(a)) {
   forall i : int, j : int | 0 <= i < |a| && 0 <= j < |a| && i <= j
     ensures(a[i] <= a[j]) {
@@ -442,6 +485,21 @@ ensures(forall j : int :: 0 <= j <= i - 1 ==> b[a[j]] != b[a[i]]) {
   }
 }
 
+lemma filter_split_idx<T>(a: array<T>, f: T -> bool, i : int)
+requires(0 <= i < a.Length) 
+ensures(filter(a[..i+1], f) == filter(a[..i], f) + filter([a[i]], f)) {
+  assert(a[..i+1] == a[..i] + [a[i]]);
+  filter_app(a[..i], [a[i]], f);
+}
+
+lemma numEq_split_idx(a: array<int>, i : int) 
+requires(0 <= i < a.Length)
+ensures(forall j :: numEq(j, a[..i+1]) == numEq(j, a[..i]) + numEq(j, [a[i]])) {
+  forall j  {
+    filter_split_idx(a, y => y == j, i);
+  }
+}
+
 /*The first loop of countingSort - builds an array that counts the occurrences of each element */
 method countOccurrences (a: array<int>, k: int) returns (b: array<int>)
 requires 0 < a.Length
@@ -449,28 +507,46 @@ requires 0 < k
 requires (noDups(a))
 requires (forall i: int :: 0 <= i < a.Length ==> 0 <= a[i] < k)
 ensures (b.Length == k + 1)
-ensures(forall i : int :: 0 <= i <= k ==> b[i] == (if i in a[..] then 1 else 0))
+ensures(forall i : int :: 0 <= i <= k ==> b[i] == numEq(i, a[..]))
 {
   b := new int[k+1](i => 0);
   var i := 0;
   while(i < a.Length) 
   decreases(a.Length - i)
   invariant (0 <= i <= a.Length)
-  invariant(forall j : int :: 0 <= j <= k ==> b[j] == if j in a[0..i] then 1 else 0) {
+  invariant(forall j : int :: 0 <= j <= k ==> b[j] == numEq(j, a[..i])) {
+    assert(a[..(i+1)] == a[..(i)] + [a[i]]);
+    ghost var t := a[i];
+    filter_app(a[..(i)], [a[i]], y => y == t);
+    numEq_split_idx(a, i);
+    assert(forall t :: numEq(t, a[..(i+1)]) == numEq(t, a[..i]) + numEq(t, [a[i]]));
+    //assert(numEq(t, [a[i]]) == 1);
+    assert(0 <= a[i] < k);
+    assert(b[a[i]] == numEq(a[i], a[..i]));
+    ghost var oldB := b;
     b[a[i]] := b[a[i]] + 1;
     i := i + 1;
+    assert(b[a[i-1]] == numEq(a[i-1], a[..i]));
+    assert(forall j : int :: 0 <= j < k ==> j != a[i-1] ==> b[j] == oldB[j]);
+    assert(forall j : int :: 0 <= j < k ==> j != a[i-1] ==> b[j] == numEq(j, a[..i]));
+    assert(forall j : int :: 0 <= j <= k ==> b[j] == numEq(j, a[..i])); //for some reason, need this for it to verify
   }
+  assert(a[..i] == a[..]);
 }
 
 /*The second loop in countingSort - returns array which gives positions of elements in sorted array*/
 method prefixSum (a:array<int>, b : array<int>) returns (c: array<int>)
 requires(0 < b.Length)
 requires(noDups(a))
-requires(forall i : int :: 0 <= i < b.Length ==> b[i] == (if i in a[..] then 1 else 0))
+requires(forall i : int :: 0 <= i < b.Length ==> b[i] == numEq(i, a[..]))
+requires (forall i: int :: 0 <= i < a.Length ==> 0 <= a[i])
 ensures(c.Length == b.Length)
 ensures(forall i : int {:induction i} :: 0 <= i < b.Length ==> (c[i] == numLeq(i, a[..]) - 1));
 {
   var i := 1;
+  //need to know that there are no elements less than x
+  numLt_unfold_zero(a[..]);
+  filterEmpty(a[..], y => y < 0);
   assert(numLeq(0, a[..]) == b[0]);
   c := new int[b.Length];
   c[0] := b[0] - 1;
@@ -479,11 +555,11 @@ ensures(forall i : int {:induction i} :: 0 <= i < b.Length ==> (c[i] == numLeq(i
   invariant (1 <= i <= c.Length)
   invariant(forall j: int {:induction j} :: (0 <= j < i ==> c[j] == numLeq(j, a[..]) - 1))
   {
+    numLeq_ind(i, a[..]);
     c[i] := b[i] + c[i-1];
     i := i + 1;
   }
 }
-
 
 /*The third (and much more complicated) loop of counting sort: put each element in its correct position 
 a is the original array, b is prefix sum array */
@@ -571,12 +647,13 @@ ensures(c.Length == a.Length)
   }
   //Now:prove that the invariants imply the properties we want
   //First, permutation:
-  //assert(a[..] == a[0..a.Length]);
-  //assert(permutation((a[..]),(filter(c[..], y => y >= 0))));
+  assert(a[..] == a[0..a.Length]);
+  assert(permutation((a[..]),(filter(c[..], y => y >= 0))));
   //assert(|filter(c[..], y => y >= 0)| == a.Length); //length is correct
   //assert(|a[..]| == a.Length);
   filter_same_length_all(c[..], y => y >= 0); //the filtered list is the original list
   filterAll(c[..], y => y >= 0);
+  assert(permutation(a[..], c[..]));
   //assert(filter(c[..], y => y >= 0) == c[..]);
   // sorted invariant - first we prove the alternate condition
   //assert(forall x :: (x in c[..]) ==> x >= 0);
@@ -591,7 +668,6 @@ ensures(c.Length == a.Length)
   sorted_alt_implies_sorted(c[..]); //c[..] is sorted
   return c;
 }
-
 
 //Our final counting sort method for arrays with no duplicates
 method countingSort(a: array<int>, k : int) returns (s: array<int>)
