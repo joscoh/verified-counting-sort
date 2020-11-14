@@ -167,6 +167,11 @@ ensures(numEq(x, a + b) == numEq(x, a) + numEq(x,b)) {
   filter_app(a, b, y => y == x);
 }
 
+lemma numEq_singleton(x: int)
+ensures(numEq(x, [x]) == 1) {
+  filterAll([x], y => y == x);
+}
+
 /* Bounds on [numLeq] - needed for bounds checks in counting sort */
 lemma {:induction x} numLt_nonneg(x: int, a : seq<int>)
 ensures(0 <= numLt(x,a)) {
@@ -277,6 +282,38 @@ ensures(i == j) {
   }
 }
 
+//How position changes when we decrease index
+lemma position_decr_index_same(a : seq<int>, i : int)
+requires(0 <= i < |a|)
+ensures(position(a[i], i - 1, a[..]) == position(a[i], i, a[..]) - 1) {
+  assert (a[..(i+1)] == a[..i] + [a[i]]);
+  numEq_app(a[i], a[..i], [a[i]]);
+  numEq_singleton(a[i]);
+  //assert(numEq(a[i], [a[i]]) == 1);
+  //assert(numEq(a[i], a[..(i+1)]) == numEq(a[i], a[..i]) + numEq(a[i], [a[i]]));
+  //assert(numEq(a[i], a[..i]) == numEq(a[i], a[..i+1]) - 1);
+}
+
+lemma position_decr_index_diff(a : seq<int>, i : int, x : int)
+requires(0 <= i < |a|)
+requires(a[i] != x)
+ensures(position(x, i - 1, a[..]) == position(x, i, a[..])) {
+  assert (a[..(i+1)] == a[..i] + [a[i]]);
+  numEq_app(x, a[..i], [a[i]]);
+  filterEmpty([a[i]], y => y == x);
+  assert(numEq(x, [a[i]]) == 0);
+}
+
+/*
+position_inj(a: seq<int>, i : int, j : int)
+requires(0 <= i < |a|)
+requires(0 <= j < |a|)
+requires(position(a[i], i, a) == position(a[j], j, a))
+
+
+      assert(b[j] == oldB[j] - 1);
+      assert(position(j, i-1, a[..]) == position(j, i, a[..]) - 1);
+*/
 /*
 lemma numLt_numLeq_trans_bound(a:seq<int>, x : int, y : int)
 requires(y < x)
@@ -299,6 +336,15 @@ ensures(numLeq(x, a) != numLeq(y, a)) {
 predicate permutation<T>(a: seq<T>, b : seq<T>) {
   multiset(a) == multiset(b)
 }
+
+//TODO: maybe prove this to remove assumption from sorted theorem, but maybe not
+/*
+lemma permutation_length<T>(a: seq<T>, b : seq<T>) 
+requires(permutation(a, b))
+ensures(|a| == |b|) {
+
+}
+*/
 
 lemma multiset_app<T>(a: seq<T>, b : seq<T>)
 ensures(multiset(a + b) == multiset(a) + multiset(b)) {
@@ -428,6 +474,23 @@ ensures(sorted(a)) {
     }
 }
 
+//We use a stronger invariant, so we want to show that this implies sorting
+lemma all_positions_implies_sorted(a : seq<int>, c : seq<int>)
+requires(permutation(a, c))
+requires(|a| == |c|)
+requires(forall x :: x in a ==> x >= 0)
+requires(forall j :: 0 <= j < |c| ==> exists k :: ((-1 < k < |a|) && c[j] == a[k] && j == position(a[k], k, a[..])))
+ensures(sorted_alt(c)) {
+  forall i : int | 0 <= i < |a|
+  ensures(numLt(c[i], c[..]) <= i <= numLeq(c[i], c[..]) - 1) {
+    assert(0 <= i < |c|);
+    var k :| (-1 < k < |a|) && c[i] == a[k] && i == position(a[k], k, a[..]);
+    position_bounds(a, a[k], k);
+    numLt_perm(a, c, c[i]);
+    numEq_perm(a, c, c[i]);
+  }
+}
+
 //If the [sorted_alt] condition holds on an array, then it holds on the seq version of the array too
 lemma sorted_alt_seq_array(a: array<int>) 
 requires(forall i : int :: 0 <= i < a.Length ==> numLt(a[i], a[..]) <= i <= numLeq(a[i], a[..]) - 1)
@@ -539,16 +602,17 @@ ensures (forall j :: 0 <= j < b.Length ==> b[j] == numLt(j, a[..]) + numEq(j, a[
 lemma sortedArrayLoopSeesNewElt (a: array<int>, b: array<int>, c: array<int>, i : int)
 requires(a.Length == c.Length)
 requires(0 <= i < a.Length)
-requires(forall j :: 0 <= j < c.Length ==> c[j] != -1 ==> exists k :: (i < k < a.Length) && c[j] == a[k])
-requires(forall j, k :: 0 <= j < c.Length ==> 0 <= k < a.Length ==> c[j] == a[k] ==> j == position(a[k], k, a[..])) //every element in its correct position
+requires(forall j :: 0 <= j < c.Length ==> c[j] != -1 ==> exists k :: ((i < k < a.Length) && c[j] == a[k] && j == position(a[k], k, a[..])))
+//requires(forall j, k :: 0 <= j < c.Length ==> 0 <= k < a.Length ==> c[j] == a[k] ==> j == position(a[k], k, a[..])) //every element in its correct position
 requires((forall j :: 0 <= j < b.Length ==> b[j] == position(j, i, a[..])))
 requires(0 <= a[i] < b.Length)
 requires(0 <= b[a[i]] < c.Length)
+//(forall j :: 0 <= j < |oldC| ==> oldC[j] != -1 ==> exists k :: ((i < k < a.Length) && oldC[j] == a[k] && j == position(a[k], k, a[..])))
 ensures(c[b[a[i]]] == -1) {
   //pf by contradiction
   if(c[b[a[i]]] == -1) {}
   else {
-    var k :| (i < k < a.Length) && c[b[a[i]]] == a[k];
+    var k :| (i < k < a.Length) && c[b[a[i]]] == a[k] && b[a[i]] == position(a[k], k, a[..]);
     assert(b[a[i]] == position(a[k], k, a[..]));
     assert(b[a[i]] == position(a[i], i, a[..]));
     position_inj(a[..], i, k);
@@ -660,12 +724,97 @@ requires(0 <= a[i] < |oldB|)
 requires(|b| == |oldB|)
 requires(b[a[i]] == idx - 1)
 requires(forall j :: 0 <= j < |b| ==> j != a[i] ==> b[j] == oldB[j]);
-//requires(b == oldB[a[i] := idx - 1])
 requires(idx == oldB[a[i]])
-//requires(forall j :: 0 <= j < b.Length ==> oldB[j] == position(j, i, a[..]))
 requires(forall j : int :: 0 <= j < |oldB| ==> oldB[j] <= numLeq(j, a[..]) - 1)
 ensures((forall j : int :: 0 <= j < |b| ==> b[j] <= numLeq(j, a[..]) - 1)){
 }
+
+lemma b_position_invariant(a:array<int>, oldB : seq<int>, b : seq<int>, i : int, idx : int)
+requires(0 <= i < a.Length)
+requires(0 <= a[i] < |oldB|)
+requires(|b| == |oldB|)
+requires(b[a[i]] == idx - 1)
+requires(forall j :: 0 <= j < |b| ==> j != a[i] ==> b[j] == oldB[j]);
+requires(idx == oldB[a[i]])
+requires(forall j :: 0 <= j < |oldB| ==> oldB[j] == position(j, i, a[..]));
+ensures(forall j :: 0 <= j < |b| ==> b[j] == position(j, i-1, a[..])) {
+  forall j | 0 <= j < |b| 
+  ensures(b[j] == position(j, i-1, a[..])) {
+    if(j == a[i]) {
+      assert(b[j] == oldB[j] - 1);
+      position_decr_index_same(a[..], i);
+      assert(position(j, i-1, a[..]) == position(j, i, a[..]) - 1);
+    }
+    else {
+      position_decr_index_diff(a[..], i, j);
+    }
+  }
+}
+
+lemma c_structure_invariant(a: array<int>, b: seq<int>, c : seq<int>, oldC: seq<int>, idx : int, i : int)
+requires(0 <= i < a.Length)
+requires(0 <= a[i] < |b|)
+requires(a.Length == |c|)
+requires(idx == b[a[i]])
+requires(idx == position(a[i], i, a[..]))
+requires(|c| == |oldC|)
+requires(0 <= idx < a.Length)
+requires(c == oldC[idx := a[i]])
+requires(forall j :: 0 <= j < |oldC| ==> oldC[j] != -1 ==> exists k :: ((i < k < a.Length) && oldC[j] == a[k] && j == position(a[k], k, a[..])))
+ensures(forall j :: 0 <= j < |c| ==> c[j] != -1 ==> exists k :: ((i-1 < k < a.Length) && c[j] == a[k] && j == position(a[k], k, a[..]))) {
+  forall j | 0 <= j < |c| && c[j] != -1
+  ensures(exists k :: (i-1 < k < a.Length) && c[j] == a[k]) {
+    if(j != idx) {
+    }
+    else {
+      assert(-1 < i < a.Length);
+      assert(c[j] == a[i]);
+      assert(j == position(a[i], i, a[..]));
+    }
+  }
+}
+/*
+lemma c_position_invariant(a: array<int>, b:seq<int>, c : seq<int>, oldC: seq<int>, idx : int, i : int)
+requires(0 <= i < a.Length)
+requires(0 <= a[i] < |b|)
+requires(a.Length == |c|)
+requires(|c| == |oldC|)
+requires(idx == b[a[i]])
+requires(idx == position(a[i], i, a[..]))
+requires(0 <= idx < a.Length)
+requires(c == oldC[idx := a[i]])
+requires(forall p, k :: 0 <= p < |oldC| ==> 0 <= k < a.Length ==> oldC[p] == a[k] ==> p == position(a[k], k, a[..]))
+ensures(forall p, k :: 0 <= p < |c| ==> 0 <= k < a.Length ==> c[p] == a[k] ==> p == position(a[k], k, a[..])) {
+  forall p, k | 0 <= p < |c| && 0 <= k < a.Length && c[p] == a[k]
+  ensures(p == position(a[k], k, a[..])) {
+    if(p == idx) {
+      assert(c[p] == a[i]);
+      assert(a[k] == a[i]);
+      assert(p == position(a[i], i, a[..]));
+
+    }
+      assert(p == position())
+    }
+    else {
+    }
+  } 
+}
+*/
+
+//b1[j] == position(j, i, a[..]))
+
+/*
+lemma filter_length_invariant(a: array<int>, c : seq<int>, oldC : seq<int>, idx : int, i : int)
+requires(0 <= i < a.Length)
+requires(a.Length == |c|)
+requires(|c| == |oldC|)
+requires(0 <= idx < a.Length)
+requires(c == oldC[idx := a[i]])
+requires(oldC[idx] == -1)
+requires(0 <= a[i])
+*/
+//position_decr_index_diff(a : seq<int>, i : int, x : int)
+
 
 /*The third (and much more complicated) loop of counting sort: put each element in its correct position 
 a is the original array, b is prefix sum array */
@@ -721,16 +870,16 @@ requires(forall i : int :: 0 <= i < a.Length ==> 0 <= a[i] < b.Length)
   //invariant(forall j: int:: 0 <= j <= i ==> c[b[a[j]]] == -1) //what we haven't done yet
   invariant(|filter(c[..], y => y >= 0)| == a.Length - (i + 1)); //ensures that we fill all of c
   invariant(permutation((a[(i+1)..]),(filter(c[..], y => y >= 0)))) //permutation invariant
-  //TODO: invariant(forall j :: 0 <= j < b.Length ==> b1[j] == position(j, i, a[..])) //the array b at each step (b is changing)
+  invariant(forall j :: 0 <= j < b.Length ==> b1[j] == position(j, i, a[..])) //the array b at each step (b is changing)
   //invariant(forall j :: 0 <= j < c.Length ==> c[j] != -1 ==> j == position(c[j], j, a[..])) //every element is in its correct position
-  //TODO: invariant(forall j :: 0 <= j < c.Length ==> c[j] != -1 ==> exists k :: (i < k < a.Length) && c[j] == a[k]) //every filled in element of c is a previously seen elt
+  invariant(forall j :: 0 <= j < c.Length ==> c[j] != -1 ==> exists k :: ((i < k < a.Length) && c[j] == a[k] && j == position(a[k], k, a[..]))) //every filled in element of c is a previously seen elt
   //TODO: invariant(forall j, k :: 0 <= j < c.Length ==> 0 <= k < a.Length ==> c[j] == a[k] ==> j == position(a[k], k, a[..])) //every element in its correct position
   //invariant(forall j : int :: 0 <= j < c.Length ==> c[j] != -1 ==> j == numLeq(c[j], a[..]) - 1) //sorting invariant
   {
     //TODO: make actual invariant
-    assume (forall j :: 0 <= j < b.Length ==> b1[j] == position(j, i, a[..])); //the array b at each step (b is changing)
-    assume(forall j :: 0 <= j < c.Length ==> c[j] != -1 ==> exists k :: (i < k < a.Length) && c[j] == a[k]); //every filled in element of c is a previously seen elt
-    assume (forall j, k :: 0 <= j < c.Length ==> 0 <= k < a.Length ==> c[j] == a[k] ==> j == position(a[k], k, a[..])); //every element in its correct position
+    //assume (forall j :: 0 <= j < b.Length ==> b1[j] == position(j, i, a[..])); //the array b at each step (b is changing)
+    //assume(forall j :: 0 <= j < c.Length ==> c[j] != -1 ==> exists k :: (i < k < a.Length) && c[j] == a[k]); //every filled in element of c is a previously seen elt
+    //assume (forall j, k :: 0 <= j < c.Length ==> 0 <= k < a.Length ==> c[j] == a[k] ==> j == position(a[k], k, a[..])); //every element in its correct position
     //assume (forall j : int :: 0 <= j < bLen ==> b1[j] <= numLeq(j, a[..]) - 1); //used for bounds checks
     //assume(permutation((a[(i+1)..]),(filter(c[..], y => y >= 0)))); //permutation invariant
 
@@ -829,13 +978,24 @@ requires(forall i : int :: 0 <= i < a.Length ==> 0 <= a[i] < b.Length)
     assert(multiset(a[i..]) == multiset(filter(c[..], y => y >= 0))); 
     //assume(permutation((a[oldI..]),(filter(c[..], y => y >= 0)))); //permutation 
     //assert(a[((i-1) + 1)..] == a[i..]);*/
+    
+    
     permutation_invariant(a, c[..], oldC, idx, oldI);
     assert(permutation((a[(oldI)..]),(filter(c[..], y => y >= 0)))); //for some reason, need this
     filter_length_invariant(a, c[..], oldC, idx, oldI);
     //assert();
     assert(forall j : int :: 0 <= j < |oldB| ==> oldB[j] <= numLeq(j, a[..]) - 1);
     b_bound_invariant(a, oldB, b1[..], i, idx);
+    b_position_invariant(a, oldB, b1[..], i, idx);
+    assert((forall j :: 0 <= j < b.Length ==> b1[j] == position(j, i-1, a[..])));
+    //c_exists_elt_invariant(a, c[..], oldC, idx, i);
+    //assert(forall j :: 0 <= j < c.Length ==> c[j] != -1 ==> exists k :: (i-1 < k < a.Length) && c[j] == a[k]);
+    c_structure_invariant(a, oldB, c[..], oldC, idx, i);
+    assert (forall j :: 0 <= j < c.Length ==> c[j] != -1 ==> exists k :: ((i - 1 < k < a.Length) && c[j] == a[k] && j == position(a[k], k, a[..])));  
+    //asserr(forall j :: 0 <= j < |c| ==> c[j] != -1 ==> exists k :: ((i-1 < k < a.Length) && c[j] == a[k] && j == position(a[k], k, a[..]))) {
 
+    //assert(forall j, k :: 0 <= j < c.Length ==> 0 <= k < a.Length ==> c[j] == a[k] ==> j == position(a[k], k, a[..]));
+    
       //permutation 
       /*
     assert(a[i..] == [a[i]] + a[i+1..]);
@@ -903,7 +1063,12 @@ requires(forall i : int :: 0 <= i < a.Length ==> 0 <= a[i] < b.Length)
     //sorting invariant
     //assert(b[a[i]] == numLeq(c[b[a[i]]], a[..]) - 1);
     */
+    
     i := i - 1;
+    assert((forall j :: 0 <= j < b.Length ==> b1[j] == position(j, i, a[..])));
+    assert(forall j :: 0 <= j < c.Length ==> c[j] != -1 ==> exists k :: (i < k < a.Length) && c[j] == a[k]);
+    assert (forall j :: 0 <= j < c.Length ==> c[j] != -1 ==> exists k :: ((i < k < a.Length) && c[j] == a[k] && j == position(a[k], k, a[..])));  
+
   }
   /*
   //Now:prove that the invariants imply the properties we want
