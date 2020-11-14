@@ -564,12 +564,108 @@ requires(0 <= i < |a|)
 ensures(a == a[..i+1] + a[i+1..]) {}
 */
 
+lemma seq_split_start<T>(a:seq<T>, i : int)
+requires(0 <= i < |a|)
+ensures(a[i..] == [a[i]] + a[i+1..]){}
+
 lemma seq_ext_eq<T>(a: seq<T>, b : seq<T>)
 requires(|a| == |b|)
 requires(forall i :: 0 <= i < |a| ==> a[i] == b[i])
 ensures(a == b) {}
 
+lemma update_def<T>(oldA: seq<T>, a : seq<T>, i : int, newVal : T)
+requires(0 <= i < |a|)
+requires(|a| == |oldA|)
+requires(forall j :: 0 <= j < |oldA| ==> j != i ==> oldA[j] == a[j])
+requires(a[i] == newVal)
+ensures(a == oldA[i := newVal]) {
 
+}
+
+lemma permutation_invariant(a: array<int>, c : seq<int>, oldC : seq<int>, idx : int, i : int)
+requires(0 <= i < a.Length)
+requires(a.Length == |c|)
+requires(|c| == |oldC|)
+requires(0 <= idx < a.Length)
+requires(c == oldC[idx := a[i]])
+requires(oldC[idx] == -1)
+requires(0 <= a[i])
+requires((permutation((a[(i+1)..]),(filter(oldC, y => y >= 0)))))
+ensures(permutation(a[i..], filter(c, y => y >= 0))) {
+  //assert(multiset(a[i+1..]) == multiset(filter(oldC, y => y >= 0)));
+    seq_split_start(a[..], i);
+    //assert(a[i..] == [a[i]] + a[i+1..]);
+    multiset_app([a[i]], a[i+1..]);
+    //assert(multiset(a[i..]) == multiset{a[i]} + multiset(a[i+1..]));
+    seq_split(oldC, idx);
+    //assert(oldC == (oldC[..idx] + [oldC[idx]])+ oldC[idx + 1..]);
+    filter_app(oldC[..idx] + [oldC[idx]], oldC[idx + 1..], y => y >= 0); //we can split filter into 0..b[a[i]], the elt b[a[i]], and the rest of the list
+    filter_app(oldC[..idx], [oldC[idx]], y => y >= 0);
+    multiset_app(filter(oldC[..idx] + [oldC[idx]], y => y >= 0), filter(oldC[idx + 1..], y => y >= 0)); //we can split filter into 0..b[a[i]], the elt b[a[i]], and the rest of the list
+    multiset_app(filter(oldC[..idx], y => y >= 0), filter([oldC[idx]], y => y >= 0));
+    /*assert((filter(oldC, y => y >= 0)) ==
+      (filter(oldC[..idx], y => y >= 0)) +
+      (filter([oldC[idx]], y => y >= 0)) +
+      (filter(oldC[idx+1..], y => y >= 0)));*/
+    /*assert(multiset(filter(oldC, y => y >= 0)) ==
+      multiset(filter(oldC[..idx], y => y >= 0)) +
+      multiset(filter([oldC[idx]], y => y >= 0)) +
+      multiset(filter(oldC[idx+1..], y => y >= 0)));*/
+    //assert(multiset(filter([oldC[idx]], y => y >= 0)) == multiset{});
+    seq_ext_eq(c[..idx], oldC[..idx]);
+    seq_ext_eq(c[idx+1..], oldC[idx+1..]);
+    seq_split(c[..], idx);
+    //assert(c[..] == c[..idx] + [c[idx]] + c[idx+1..]);
+    filter_app(oldC[..idx] + [c[idx]], oldC[idx + 1..], y => y >= 0);
+    filter_app(oldC[..idx], [c[idx]], y => y >= 0);
+    multiset_app(filter(oldC[..idx] + [c[idx]], y => y >= 0), filter(oldC[idx + 1..], y => y >= 0)); //we can split filter into 0..b[a[i]], the elt b[a[i]], and the rest of the list
+    multiset_app(filter(oldC[..idx], y => y >= 0), filter([c[idx]], y => y >= 0));
+    /*assert(multiset(filter(c[..], y => y >= 0)) ==
+      multiset(filter(oldC[..idx], y => y >= 0)) +
+      multiset(filter([c[idx]], y => y >= 0)) +
+      multiset(filter(oldC[idx+1..], y => y >= 0)));*/
+    /*assert(multiset(filter([c[idx]], y => y >= 0)) == multiset{a[i]});
+    assert(multiset(filter(c[..], y => y >= 0)) == multiset{a[i]} +
+      multiset(filter(oldC, y => y >= 0)));
+    assert(multiset(a[i..]) == multiset(filter(c[..], y => y >= 0)));*/
+}
+
+lemma filter_length_invariant(a: array<int>, c : seq<int>, oldC : seq<int>, idx : int, i : int)
+requires(0 <= i < a.Length)
+requires(a.Length == |c|)
+requires(|c| == |oldC|)
+requires(0 <= idx < a.Length)
+requires(c == oldC[idx := a[i]])
+requires(oldC[idx] == -1)
+requires(0 <= a[i])
+requires(|filter(oldC, y => y >= 0)| == a.Length - (i + 1))
+ensures(|filter(c[..], y => y >= 0)| == a.Length - i) {
+  assert(|filter(oldC, y => y >= 0)| == a.Length - (i + 1)); //assumption
+    seq_split(oldC, idx);
+    assert(oldC == (oldC[..idx] + [oldC[idx]])+ oldC[idx + 1..]);
+    filter_app(oldC[..idx] + [oldC[idx]], oldC[idx + 1..], y => y >= 0); //we can split filter into 0..b[a[i]], the elt b[a[i]], and the rest of the list
+    filter_app(oldC[..idx], [oldC[idx]], y => y >= 0);
+    filterEmpty([oldC[idx]], y => y >= 0); //since c[idx] = -1
+    seq_ext_eq(c[..idx], oldC[..idx]);
+    seq_ext_eq(c[idx+1..], oldC[idx+1..]);
+    seq_split(c[..], idx);
+    assert(c[..] == c[..idx] + [c[idx]] + c[idx+1..]);
+    filter_app(oldC[..idx] + [c[idx]], oldC[idx + 1..], y => y >= 0);
+    filter_app(oldC[..idx], [c[idx]], y => y >= 0); 
+}
+
+lemma b_bound_invariant(a: array<int>, oldB : seq<int>, b : seq<int>, i: int, idx : int)
+requires(0 <= i < a.Length)
+requires(0 <= a[i] < |oldB|)
+requires(|b| == |oldB|)
+requires(b[a[i]] == idx - 1)
+requires(forall j :: 0 <= j < |b| ==> j != a[i] ==> b[j] == oldB[j]);
+//requires(b == oldB[a[i] := idx - 1])
+requires(idx == oldB[a[i]])
+//requires(forall j :: 0 <= j < b.Length ==> oldB[j] == position(j, i, a[..]))
+requires(forall j : int :: 0 <= j < |oldB| ==> oldB[j] <= numLeq(j, a[..]) - 1)
+ensures((forall j : int :: 0 <= j < |b| ==> b[j] <= numLeq(j, a[..]) - 1)){
+}
 
 /*The third (and much more complicated) loop of counting sort: put each element in its correct position 
 a is the original array, b is prefix sum array */
@@ -617,14 +713,14 @@ requires(forall i : int :: 0 <= i < a.Length ==> 0 <= a[i] < b.Length)
   invariant(-1 <= i < a.Length)
   invariant(b1.Length == bLen) //need for bounds
   invariant(forall j :: 0 <= j < a.Length ==> 0 <= a[j] < bLen); //also need for bounds
-  //TODO: invariant(forall j : int :: 0 <= j < bLen ==> b1[j] <= numLeq(j, a[..]) - 1) //used for bounds checks
+  invariant(forall j : int :: 0 <= j < bLen ==> b1[j] <= numLeq(j, a[..]) - 1) //used for bounds checks
   //invariant(forall j: int ::i < j < a.Length ==> 0 <= b[a[j]] < c.Length) //bounds safety
   //invariant(forall j: int:: i < j < a.Length ==> c[b[a[j]]] >= 0) //what we've done (not true bc of b - see if we need)
   //invariant(forall j : int :: 0 <= j < a.Length ==> 0 <= a[j] < b1.Length ==> 0 <= b1[a[j]] < c.Length ==> c[b1[a[j]]] != -1 ==> i < j) - not true bc of b
   //invariant(0 <= i < a.Length ==> 0 <= a[i] < b.Length ==> 0 <= b1[a[i]] < c.Length ==> c[b1[a[i]]] == -1) //we haven't done the current elt yet - the preconditions always true
   //invariant(forall j: int:: 0 <= j <= i ==> c[b[a[j]]] == -1) //what we haven't done yet
   invariant(|filter(c[..], y => y >= 0)| == a.Length - (i + 1)); //ensures that we fill all of c
-  //invariant(permutation((a[(i+1)..]),(filter(c[..], y => y >= 0)))) //permutation invariant
+  invariant(permutation((a[(i+1)..]),(filter(c[..], y => y >= 0)))) //permutation invariant
   //TODO: invariant(forall j :: 0 <= j < b.Length ==> b1[j] == position(j, i, a[..])) //the array b at each step (b is changing)
   //invariant(forall j :: 0 <= j < c.Length ==> c[j] != -1 ==> j == position(c[j], j, a[..])) //every element is in its correct position
   //TODO: invariant(forall j :: 0 <= j < c.Length ==> c[j] != -1 ==> exists k :: (i < k < a.Length) && c[j] == a[k]) //every filled in element of c is a previously seen elt
@@ -635,8 +731,12 @@ requires(forall i : int :: 0 <= i < a.Length ==> 0 <= a[i] < b.Length)
     assume (forall j :: 0 <= j < b.Length ==> b1[j] == position(j, i, a[..])); //the array b at each step (b is changing)
     assume(forall j :: 0 <= j < c.Length ==> c[j] != -1 ==> exists k :: (i < k < a.Length) && c[j] == a[k]); //every filled in element of c is a previously seen elt
     assume (forall j, k :: 0 <= j < c.Length ==> 0 <= k < a.Length ==> c[j] == a[k] ==> j == position(a[k], k, a[..])); //every element in its correct position
-    assume (forall j : int :: 0 <= j < bLen ==> b1[j] <= numLeq(j, a[..]) - 1); //used for bounds checks
-    assume(permutation((a[(i+1)..]),(filter(c[..], y => y >= 0)))); //permutation invariant
+    //assume (forall j : int :: 0 <= j < bLen ==> b1[j] <= numLeq(j, a[..]) - 1); //used for bounds checks
+    //assume(permutation((a[(i+1)..]),(filter(c[..], y => y >= 0)))); //permutation invariant
+
+    //done
+    //assume(|filter(c[..], y => y >= 0)| == a.Length - (i + 1)); //ensures that we fill all of c
+
 
   
 
@@ -656,6 +756,7 @@ requires(forall i : int :: 0 <= i < a.Length ==> 0 <= a[i] < b.Length)
     ghost var oldC := c[..];
     ghost var oldB := b1[..];
     ghost var idx := b1[a[i]];
+    ghost var oldI := i;
 
     //A crucial step: show that c[b1[a[i]]] == -1, so we are actually considering a new element
     sortedArrayLoopSeesNewElt(a, b1, c, i);
@@ -665,9 +766,14 @@ requires(forall i : int :: 0 <= i < a.Length ==> 0 <= a[i] < b.Length)
     c[b1[a[i]]] := a[i];
 
     b1[a[i]] := b1[a[i]] - 1;
-
+    assert(c[..] == oldC[idx := a[i]]);
+    assert(b1[a[i]] == idx - 1);
+    assert(forall j :: 0 <= j < |oldB| ==> j != a[i] ==> b1[j] == oldB[j]);
+    //update_def(oldB, b1[..], a[i], idx-1);
+    //assert(b1[..] == oldB[a[i] := idx - 1]);
+    //(a: seq<T>, newA : seq<T>, i : int, newVal : T)
     //Restore the invariants
-
+    /*
     //filter (length) invariant
     assert(|filter(oldC, y => y >= 0)| == a.Length - (i + 1)); //assumption
     seq_split(oldC, idx);
@@ -680,8 +786,55 @@ requires(forall i : int :: 0 <= i < a.Length ==> 0 <= a[i] < b.Length)
     seq_split(c[..], idx);
     assert(c[..] == c[..idx] + [c[idx]] + c[idx+1..]);
     filter_app(oldC[..idx] + [c[idx]], oldC[idx + 1..], y => y >= 0);
+    filter_app(oldC[..idx], [c[idx]], y => y >= 0); */
+
+    //permutation 
+    //TODO: figure out what the fuck is wrong
+    /*
+    assert(multiset(a[i+1..]) == multiset(filter(oldC, y => y >= 0)));
+    seq_split_start(a[..], i);
+    assert(a[i..] == [a[i]] + a[i+1..]);
+    multiset_app([a[i]], a[i+1..]);
+    assert(multiset(a[i..]) == multiset{a[i]} + multiset(a[i+1..]));
+    seq_split(oldC, idx);
+    assert(oldC == (oldC[..idx] + [oldC[idx]])+ oldC[idx + 1..]);
+    filter_app(oldC[..idx] + [oldC[idx]], oldC[idx + 1..], y => y >= 0); //we can split filter into 0..b[a[i]], the elt b[a[i]], and the rest of the list
+    filter_app(oldC[..idx], [oldC[idx]], y => y >= 0);
+    multiset_app(filter(oldC[..idx] + [oldC[idx]], y => y >= 0), filter(oldC[idx + 1..], y => y >= 0)); //we can split filter into 0..b[a[i]], the elt b[a[i]], and the rest of the list
+    multiset_app(filter(oldC[..idx], y => y >= 0), filter([oldC[idx]], y => y >= 0));
+    assert((filter(oldC, y => y >= 0)) ==
+      (filter(oldC[..idx], y => y >= 0)) +
+      (filter([oldC[idx]], y => y >= 0)) +
+      (filter(oldC[idx+1..], y => y >= 0)));
+    assert(multiset(filter(oldC, y => y >= 0)) ==
+      multiset(filter(oldC[..idx], y => y >= 0)) +
+      multiset(filter([oldC[idx]], y => y >= 0)) +
+      multiset(filter(oldC[idx+1..], y => y >= 0)));
+    assert(multiset(filter([oldC[idx]], y => y >= 0)) == multiset{});
+    seq_ext_eq(c[..idx], oldC[..idx]);
+    seq_ext_eq(c[idx+1..], oldC[idx+1..]);
+    seq_split(c[..], idx);
+    assert(c[..] == c[..idx] + [c[idx]] + c[idx+1..]);
+    filter_app(oldC[..idx] + [c[idx]], oldC[idx + 1..], y => y >= 0);
     filter_app(oldC[..idx], [c[idx]], y => y >= 0);
-    
+    multiset_app(filter(oldC[..idx] + [c[idx]], y => y >= 0), filter(oldC[idx + 1..], y => y >= 0)); //we can split filter into 0..b[a[i]], the elt b[a[i]], and the rest of the list
+    multiset_app(filter(oldC[..idx], y => y >= 0), filter([c[idx]], y => y >= 0));
+    assert(multiset(filter(c[..], y => y >= 0)) ==
+      multiset(filter(oldC[..idx], y => y >= 0)) +
+      multiset(filter([c[idx]], y => y >= 0)) +
+      multiset(filter(oldC[idx+1..], y => y >= 0)));
+    assert(multiset(filter([c[idx]], y => y >= 0)) == multiset{a[i]});
+    assert(multiset(filter(c[..], y => y >= 0)) == multiset{a[i]} +
+      multiset(filter(oldC, y => y >= 0)));
+    assert(multiset(a[i..]) == multiset(filter(c[..], y => y >= 0))); 
+    //assume(permutation((a[oldI..]),(filter(c[..], y => y >= 0)))); //permutation 
+    //assert(a[((i-1) + 1)..] == a[i..]);*/
+    permutation_invariant(a, c[..], oldC, idx, oldI);
+    assert(permutation((a[(oldI)..]),(filter(c[..], y => y >= 0)))); //for some reason, need this
+    filter_length_invariant(a, c[..], oldC, idx, oldI);
+    //assert();
+    assert(forall j : int :: 0 <= j < |oldB| ==> oldB[j] <= numLeq(j, a[..]) - 1);
+    b_bound_invariant(a, oldB, b1[..], i, idx);
 
       //permutation 
       /*
