@@ -553,7 +553,7 @@ ensures(forall j :: 0 <= j < |newB| ==> newB[j] == numEq(j, a[..i+1])) {
     }
   }
 }
-/*
+
 method countOccurrences (a: array<int>, k: int) returns (b: array<int>)
 requires 0 < a.Length
 requires 0 < k
@@ -589,7 +589,7 @@ ensures(forall i : int :: 0 <= i <= k ==> b[i] == numEq(i, a[..]))
   }
   assert(a[..i] == a[..]);
 }
-*/
+
 
 /*The second loop in countingSort - returns array which gives positions of elements in sorted array*/
 method prefixSum (a:array<int>, b : array<int>) returns (c: array<int>)
@@ -844,6 +844,38 @@ requires(0 <= a[i])
 */
 //position_decr_index_diff(a : seq<int>, i : int, x : int)
 
+//Prove that the invariants imply the postconditions in a separate lemma
+//TODO: dont actually need the length fact, can prove from permutation
+lemma afterLoopPermutation(a: array<int>, c : array<int>)
+requires(permutation((a[0..]),(filter(c[..], y => y >= 0)))) //permutation invariant
+requires(|filter(c[..], y => y >= 0)| == a.Length)
+requires(a.Length == c.Length)
+ensures(permutation(a[..], c[..])) {
+  filter_same_length_all(c[..], y => y >= 0); //the filtered list is the original list
+  filterAll(c[..], y => y >= 0);  
+}
+
+lemma afterLoopSorted(a : array<int>, c : array<int>)
+requires(forall x :: x in a[..] ==> x >= 0)
+requires(|filter(c[..], y => y >= 0)| == a.Length)
+requires(permutation(a[..], c[..]))
+requires(a.Length == c.Length)
+requires(forall j :: 0 <= j < c.Length ==> c[j] != -1 ==> exists k :: ((-1 < k < a.Length) && c[j] == a[k] && j == position(a[k], k, a[..])))
+ensures(sorted(c[..])) {
+  filter_same_length_all(c[..], y => y >= 0); //the filtered list is the original list
+  filterAll(c[..], y => y >= 0);
+  all_elems_seq_array(c, y => y >= 0); //all elements in c satsify y >= 0
+  all_elems_seq_array(c, y => y != -1);
+  assert(forall j :: 0 <= j  < c.Length ==> c[j] != -1);
+  assert(forall j :: 0 <= j < c.Length ==> exists k :: ((-1 < k < a.Length) && c[j] == a[k] && j == position(a[k], k, a[..])));
+  all_positions_implies_sorted(a[..], c[..]);
+  assert(sorted_alt(c[..])); 
+  sorted_alt_seq_array(c); //c[..] satsifes sorted_alt condition
+  sorted_alt_implies_sorted(c[..]); //c[..] is sorted
+}
+
+
+
 
 /*The third (and much more complicated) loop of counting sort: put each element in its correct position 
 a is the original array, b is prefix sum array */
@@ -974,7 +1006,11 @@ ensures(sorted(c[..]))
     assert (forall j :: 0 <= j < c.Length ==> c[j] != -1 ==> exists k :: ((i < k < a.Length) && c[j] == a[k] && j == position(a[k], k, a[..])));  
 
   }
-  
+  afterLoopPermutation(a, c);
+  assert(permutation(a[..], c[..]));
+  afterLoopSorted(a, c);
+  assert(sorted(c[..]));
+  /*
   //Now:prove that the invariants imply the properties we want
   //First, permutation:
   assert(a[..] == a[0..a.Length]);
@@ -1006,5 +1042,6 @@ ensures(sorted(c[..]))
   assert(permutation(a[..], c[..]));
   //assert(sorted(c[..]));
   return c;
+  */
 
 }
