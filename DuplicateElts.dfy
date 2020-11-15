@@ -500,9 +500,11 @@ ensures(sorted_alt(a[..])){
 /*If the sorted_alt condition holds with respect to array a, then it also holds
   with respect to array b, if a and b are permutations
  */
-lemma sorted_alt_perm(a : array<int>, b : array<int>)
+ //TODO: need to do this
+ lemma sorted_alt_perm(a : array<int>, b : array<int>)
 requires(forall i : int :: 0 <= i < a.Length ==> a[i] >= 0)
 requires(permutation(a[..],b[..]))
+//requires(forall i : int :: 0 <= i < |b| ==> numLt(b[i], a[..]) <= i <= numLeq(a[i], a[..]) - 1)
 requires(forall j : int :: 0 <= j < b.Length ==> j == numLeq(b[j], a[..]) - 1)
 ensures((forall j : int :: 0 <= j < b.Length ==> j == numLeq(b[j], b[..]) - 1))  {
   forall j | 0 <= j < b.Length
@@ -822,8 +824,8 @@ a is the original array, b is prefix sum array */
 method constructSortedArray (a: array<int>, b: array<int>) returns (c : array<int>)
 requires(forall i : int {:induction i} :: 0 <= i < b.Length ==> (b[i] == numLeq(i, a[..]) - 1));
 requires(forall i : int :: 0 <= i < a.Length ==> 0 <= a[i] < b.Length)
-//ensures(permutation(a[..], c[..]))
-//ensures(sorted(c[..]))
+ensures(permutation(a[..], c[..]))
+ensures(sorted(c[..]))
 //ensures(c.Length == a.Length)
 {
   //TODO:SEE IF THIS HELPS
@@ -980,9 +982,9 @@ requires(forall i : int :: 0 <= i < a.Length ==> 0 <= a[i] < b.Length)
     //assert(a[((i-1) + 1)..] == a[i..]);*/
     
     
-    permutation_invariant(a, c[..], oldC, idx, oldI);
-    assert(permutation((a[(oldI)..]),(filter(c[..], y => y >= 0)))); //for some reason, need this
-    filter_length_invariant(a, c[..], oldC, idx, oldI);
+    permutation_invariant(a, c[..], oldC, idx, i);
+    assert(permutation((a[i..]),(filter(c[..], y => y >= 0)))); //for some reason, need this
+    filter_length_invariant(a, c[..], oldC, idx, i);
     //assert();
     assert(forall j : int :: 0 <= j < |oldB| ==> oldB[j] <= numLeq(j, a[..]) - 1);
     b_bound_invariant(a, oldB, b1[..], i, idx);
@@ -1065,12 +1067,13 @@ requires(forall i : int :: 0 <= i < a.Length ==> 0 <= a[i] < b.Length)
     */
     
     i := i - 1;
+    assert(permutation((a[(i+1)..]),(filter(c[..], y => y >= 0))));
     assert((forall j :: 0 <= j < b.Length ==> b1[j] == position(j, i, a[..])));
     assert(forall j :: 0 <= j < c.Length ==> c[j] != -1 ==> exists k :: (i < k < a.Length) && c[j] == a[k]);
     assert (forall j :: 0 <= j < c.Length ==> c[j] != -1 ==> exists k :: ((i < k < a.Length) && c[j] == a[k] && j == position(a[k], k, a[..])));  
 
   }
-  /*
+  
   //Now:prove that the invariants imply the properties we want
   //First, permutation:
   assert(a[..] == a[0..a.Length]);
@@ -1084,14 +1087,20 @@ requires(forall i : int :: 0 <= i < a.Length ==> 0 <= a[i] < b.Length)
   // sorted invariant - first we prove the alternate condition
   //assert(forall x :: (x in c[..]) ==> x >= 0);
   all_elems_seq_array(c, y => y >= 0); //all elements in c satsify y >= 0
+  all_elems_seq_array(c, y => y != -1);
   //assert(forall j : int :: 0 <= j < c.Length ==> c[j] >= 0);
   //assert(forall j : int :: 0 <= j < c.Length ==> c[j] != -1);
   //assert(forall j : int :: 0 <= j < c.Length ==> j == numLeq(c[j], a[..]) - 1);
-  sorted_alt_perm(a, c); //c satisfied sorted_alt condition
+  assert(forall j :: 0 <= j < c.Length ==> exists k :: ((-1 < k < a.Length) && c[j] == a[k] && j == position(a[k], k, a[..])));
+  all_positions_implies_sorted(a[..], c[..]);
+  assert(sorted_alt(c[..])); 
+  //sorted_alt_perm(a, c); //c satisfied sorted_alt condition (sorted_alt(c)
   sorted_alt_seq_array(c); //c[..] satsifes sorted_alt condition
-  noDups_arr_to_seq(a); //a[..] has no duplicates
-  noDups_perm(a[..], c[..]); // c[..] has no duplicates
+  //noDups_arr_to_seq(a); //a[..] has no duplicates
+  //noDups_perm(a[..], c[..]); // c[..] has no duplicates
   sorted_alt_implies_sorted(c[..]); //c[..] is sorted
+  assert(sorted(c[..]));
+  assert(permutation(a[..], c[..]));
+  //assert(sorted(c[..]));
   return c;
-  */
 }
