@@ -338,16 +338,53 @@ predicate permutation<T>(a: seq<T>, b : seq<T>) {
 }
 
 //TODO: maybe prove this to remove assumption from sorted theorem, but maybe not
-/*
-lemma permutation_length<T>(a: seq<T>, b : seq<T>) 
-requires(permutation(a, b))
-ensures(|a| == |b|) {
 
-}
-*/
+/*A few facts about multisets */
 
 lemma multiset_app<T>(a: seq<T>, b : seq<T>)
 ensures(multiset(a + b) == multiset(a) + multiset(b)) {
+}
+
+lemma multiset_elt_app<T>(a: multiset<T>, b : multiset<T>, x : T)
+ensures((a + b)[x] == a[x] + b[x]) {
+
+}
+
+lemma multiset_union_inj<T>(a: multiset<T>, b : multiset<T>, s: multiset<T>) 
+requires(a + s == b + s)
+ensures (a == b) {
+  forall x : T
+  ensures (a[x] == b[x]) {
+    multiset_elt_app(a, s, x);
+    multiset_elt_app(b, s, x);
+  }
+}
+
+//Now, we prove that if a and b are permutations, then they have the same length
+lemma permutation_length<T>(a: seq<T>, b : seq<T>) 
+requires(permutation(a, b))
+ensures(|a| == |b|) {
+  if (|a| == 0) {
+    assert(multiset(a) == multiset([]));
+    assert(multiset(b) == multiset([]));
+    assert(|multiset(b)| == 0);
+  }
+  else {
+    assert(a[0] in a);
+    perm_in(b, a);
+    assert (a[0] in b);
+    assert(exists k :: 0 <= k < |b| && b[k] == a[0]);
+    var k :| 0 <= k < |b| && b[k] == a[0];
+    assert(b == b[..k] + [b[k]] + b[k+1..]);
+    assert(a == [a[0]] + a[1..]);
+    assert(multiset(b) == multiset(b[..k]) + multiset([b[k]]) + multiset(b[k+1..]));
+    assert(multiset(a) == multiset([a[0]]) + multiset(a[1..]));
+    var newB := b[..k] + b[k+1..];
+    assert(multiset(newB) + multiset([b[k]]) == multiset(b));
+    assert(multiset([b[k]]) == multiset([a[0]]));
+    multiset_union_inj(multiset(a[1..]), multiset(newB), multiset([a[0]]));
+    permutation_length(a[1..], newB);
+  }
 }
 
 //If a and b are permutations, then if x is in b, x is in a 
@@ -369,18 +406,6 @@ ensures(numEq(x,a) == multiset(a)[x]) {
     assert(a ==[a[0]] + a[1..]);
   }
 }
-/*
-lemma perm_remove<T>(a:seq<T>, b : seq<T>, i : int, j : int, x : T)
-requires(permutation(a,b))
-requires(0 <= i < |a|)
-requires(0 <= j < |b|)
-requires(a[i] == x)
-requires(b[j] == x)
-ensures(permutation(a[..i] + a[(i+1)..], b[..j] + b[j+1..])) {
-
-
-}
-*/
 
 lemma numEq_perm(a:seq<int>, b : seq<int>, x : int)
 requires(permutation(a,b))
@@ -389,7 +414,6 @@ ensures(numEq(x, a) == numEq(x, b)) {
     numEq_multiset(x, b);
 }
 
-//The more general version of this uses filter, but we will do that later (maybe)
 lemma perm_preserve_pred<T>(a:seq<T>, b:seq<T>, f: T -> bool)
 requires(permutation(a, b))
 requires(forall x :: x in a ==> f(x))
@@ -497,22 +521,6 @@ requires(forall i : int :: 0 <= i < a.Length ==> numLt(a[i], a[..]) <= i <= numL
 ensures(sorted_alt(a[..])){
 }
 
-/*If the sorted_alt condition holds with respect to array a, then it also holds
-  with respect to array b, if a and b are permutations
- */
- //TODO: need to do this
- lemma sorted_alt_perm(a : array<int>, b : array<int>)
-requires(forall i : int :: 0 <= i < a.Length ==> a[i] >= 0)
-requires(permutation(a[..],b[..]))
-//requires(forall i : int :: 0 <= i < |b| ==> numLt(b[i], a[..]) <= i <= numLeq(a[i], a[..]) - 1)
-requires(forall j : int :: 0 <= j < b.Length ==> j == numLeq(b[j], a[..]) - 1)
-ensures((forall j : int :: 0 <= j < b.Length ==> j == numLeq(b[j], b[..]) - 1))  {
-  forall j | 0 <= j < b.Length
-  ensures (j == numLeq(b[j], b[..]) - 1) {
-    numLeq_perm(a[..], b[..], b[j]);
-  }
-}
-
 /* Stability = we say that a and b are stable with respect to each other if the relative order of equal elements is preseved
   We can express that as the following */
 predicate stable(a : seq<int>, b : seq<int>) {
@@ -604,6 +612,7 @@ ensures(forall j :: numEq(j, a[..i+1]) == numEq(j, a[..i]) + numEq(j, [a[i]])) {
 
 /*The first loop of countingSort - builds an array that counts the occurrences of each element */
 
+//Prove the invariant is preserved through the loop in a separate lemma, since Dafny has trouble proving it automatically
 lemma countOccurrencesInvariant(a : array<int>, b : seq<int>, newB : seq<int>, i : int, elt: int)
 requires(0 <= i < a.Length)
 requires(0 <= a[i] < |b|)
@@ -639,14 +648,6 @@ ensures(forall i : int :: 0 <= i <= k ==> b[i] == numEq(i, a[..]))
   decreases(a.Length - i)
   invariant (0 <= i <= a.Length)
   invariant(forall j : int :: 0 <= j <= k ==> b[j] == numEq(j, a[..i])) {
-    //assert(a[..(i+1)] == a[..(i)] + [a[i]]);
-    //ghost var t := a[i];
-    //filter_app(a[..(i)], [a[i]], y => y == t);
-    //numEq_split_idx(a, i);
-    //assert(forall t :: numEq(t, a[..(i+1)]) == numEq(t, a[..i]) + numEq(t, [a[i]]));
-    //assert(numEq(t, [a[i]]) == 1);
-    //assert(0 <= a[i] < k);
-    //assert(b[a[i]] == numEq(a[i], a[..i]));
     ghost var oldB := b[..];
     ghost var ai := a[i];
     b[a[i]] := b[a[i]] + 1;
@@ -655,8 +656,6 @@ ensures(forall i : int :: 0 <= i <= k ==> b[i] == numEq(i, a[..]))
     countOccurrencesInvariant(a, oldB, b[..], i, a[i]);
 
     i := i + 1;
-    //assert(b[a[i-1]] == numEq(a[i-1], a[..i]));
-    //assert(forall j : int :: 0 <= j < k ==> j != a[i-1] ==> b[j] == oldB[j]);
     assert(forall j : int :: 0 <= j <= k ==> b[j] == numEq(j, a[..i])); //for some reason, need this for it to verify
   }
   assert(a[..i] == a[..]);
@@ -689,6 +688,13 @@ ensures(forall i : int {:induction i} :: 0 <= i < b.Length ==> (c[i] == numLeq(i
   }
 }
 
+/* The third loop - lemmas and invariants */
+
+/*The third loop is much more complicated to prove correct. To ensure Dafny does not time out, we do almost all
+  of the nontrivial work (invariant preservation, proving postconditions, proving key properties) in the following lemmas.
+*/
+
+//The array b is correct to begin
 lemma constructSortedArrayBInvarEntry(a: array<int>, b : array<int>, i : int)
 requires (forall j :: 0 <= j < b.Length ==> b[j] == numLeq(j, a[..]) - 1)
 requires(i == a.Length - 1)
@@ -699,16 +705,14 @@ ensures (forall j :: 0 <= j < b.Length ==> b[j] == numLt(j, a[..]) + numEq(j, a[
     }
 }
 
-//The key lemma: in our loop, c[b1[a]] != -1, so we do not overwrite a previously written value
+//A key lemma: in our loop, c[b1[a]] != -1, so we do not overwrite a previously written value
 lemma sortedArrayLoopSeesNewElt (a: array<int>, b: array<int>, c: array<int>, i : int)
 requires(a.Length == c.Length)
 requires(0 <= i < a.Length)
 requires(forall j :: 0 <= j < c.Length ==> c[j] != -1 ==> exists k :: ((i < k < a.Length) && c[j] == a[k] && j == position(a[k], k, a[..])))
-//requires(forall j, k :: 0 <= j < c.Length ==> 0 <= k < a.Length ==> c[j] == a[k] ==> j == position(a[k], k, a[..])) //every element in its correct position
 requires((forall j :: 0 <= j < b.Length ==> b[j] == position(j, i, a[..])))
 requires(0 <= a[i] < b.Length)
 requires(0 <= b[a[i]] < c.Length)
-//(forall j :: 0 <= j < |oldC| ==> oldC[j] != -1 ==> exists k :: ((i < k < a.Length) && oldC[j] == a[k] && j == position(a[k], k, a[..])))
 ensures(c[b[a[i]]] == -1) {
   //pf by contradiction
   if(c[b[a[i]]] == -1) {}
@@ -717,36 +721,15 @@ ensures(c[b[a[i]]] == -1) {
     assert(b[a[i]] == position(a[k], k, a[..]));
     assert(b[a[i]] == position(a[i], i, a[..]));
     position_inj(a[..], i, k);
-
   }
 }
+
+//trivial but fairly useful: splitting lemma by index
 lemma seq_split<T>(a: seq<T>, i : int)
 requires (0 <= i < |a|)
 ensures(a == a[..i] + [a[i]] + a[i+1..]) {}
-/*
-lemma seq_split_plus<T>(a: seq<T>, i : int)
-requires(0 <= i < |a|)
-ensures(a == a[..i+1] + a[i+1..]) {}
-*/
 
-lemma seq_split_start<T>(a:seq<T>, i : int)
-requires(0 <= i < |a|)
-ensures(a[i..] == [a[i]] + a[i+1..]){}
-
-lemma seq_ext_eq<T>(a: seq<T>, b : seq<T>)
-requires(|a| == |b|)
-requires(forall i :: 0 <= i < |a| ==> a[i] == b[i])
-ensures(a == b) {}
-
-lemma update_def<T>(oldA: seq<T>, a : seq<T>, i : int, newVal : T)
-requires(0 <= i < |a|)
-requires(|a| == |oldA|)
-requires(forall j :: 0 <= j < |oldA| ==> j != i ==> oldA[j] == a[j])
-requires(a[i] == newVal)
-ensures(a == oldA[i := newVal]) {
-
-}
-
+//The permutation invariant: the completed part of c is a permutation of a[(i+1)..]
 lemma permutation_invariant(a: array<int>, c : seq<int>, oldC : seq<int>, idx : int, i : int)
 requires(0 <= i < a.Length)
 requires(a.Length == |c|)
@@ -757,44 +740,21 @@ requires(oldC[idx] == -1)
 requires(0 <= a[i])
 requires((permutation((a[(i+1)..]),(filter(oldC, y => y >= 0)))))
 ensures(permutation(a[i..], filter(c, y => y >= 0))) {
-  //assert(multiset(a[i+1..]) == multiset(filter(oldC, y => y >= 0)));
-    seq_split_start(a[..], i);
-    //assert(a[i..] == [a[i]] + a[i+1..]);
+    assert(a[i..] == [a[i]] + a[(i+1)..]);
     multiset_app([a[i]], a[i+1..]);
-    //assert(multiset(a[i..]) == multiset{a[i]} + multiset(a[i+1..]));
     seq_split(oldC, idx);
-    //assert(oldC == (oldC[..idx] + [oldC[idx]])+ oldC[idx + 1..]);
     filter_app(oldC[..idx] + [oldC[idx]], oldC[idx + 1..], y => y >= 0); //we can split filter into 0..b[a[i]], the elt b[a[i]], and the rest of the list
     filter_app(oldC[..idx], [oldC[idx]], y => y >= 0);
     multiset_app(filter(oldC[..idx] + [oldC[idx]], y => y >= 0), filter(oldC[idx + 1..], y => y >= 0)); //we can split filter into 0..b[a[i]], the elt b[a[i]], and the rest of the list
     multiset_app(filter(oldC[..idx], y => y >= 0), filter([oldC[idx]], y => y >= 0));
-    /*assert((filter(oldC, y => y >= 0)) ==
-      (filter(oldC[..idx], y => y >= 0)) +
-      (filter([oldC[idx]], y => y >= 0)) +
-      (filter(oldC[idx+1..], y => y >= 0)));*/
-    /*assert(multiset(filter(oldC, y => y >= 0)) ==
-      multiset(filter(oldC[..idx], y => y >= 0)) +
-      multiset(filter([oldC[idx]], y => y >= 0)) +
-      multiset(filter(oldC[idx+1..], y => y >= 0)));*/
-    //assert(multiset(filter([oldC[idx]], y => y >= 0)) == multiset{});
-    seq_ext_eq(c[..idx], oldC[..idx]);
-    seq_ext_eq(c[idx+1..], oldC[idx+1..]);
     seq_split(c[..], idx);
-    //assert(c[..] == c[..idx] + [c[idx]] + c[idx+1..]);
     filter_app(oldC[..idx] + [c[idx]], oldC[idx + 1..], y => y >= 0);
     filter_app(oldC[..idx], [c[idx]], y => y >= 0);
     multiset_app(filter(oldC[..idx] + [c[idx]], y => y >= 0), filter(oldC[idx + 1..], y => y >= 0)); //we can split filter into 0..b[a[i]], the elt b[a[i]], and the rest of the list
     multiset_app(filter(oldC[..idx], y => y >= 0), filter([c[idx]], y => y >= 0));
-    /*assert(multiset(filter(c[..], y => y >= 0)) ==
-      multiset(filter(oldC[..idx], y => y >= 0)) +
-      multiset(filter([c[idx]], y => y >= 0)) +
-      multiset(filter(oldC[idx+1..], y => y >= 0)));*/
-    /*assert(multiset(filter([c[idx]], y => y >= 0)) == multiset{a[i]});
-    assert(multiset(filter(c[..], y => y >= 0)) == multiset{a[i]} +
-      multiset(filter(oldC, y => y >= 0)));
-    assert(multiset(a[i..]) == multiset(filter(c[..], y => y >= 0)));*/
 }
 
+//The invariant that the length of the completed part of c is |a| - (i+1) (TODO: remove once prove permutation)
 lemma filter_length_invariant(a: array<int>, c : seq<int>, oldC : seq<int>, idx : int, i : int)
 requires(0 <= i < a.Length)
 requires(a.Length == |c|)
@@ -811,14 +771,14 @@ ensures(|filter(c[..], y => y >= 0)| == a.Length - i) {
     filter_app(oldC[..idx] + [oldC[idx]], oldC[idx + 1..], y => y >= 0); //we can split filter into 0..b[a[i]], the elt b[a[i]], and the rest of the list
     filter_app(oldC[..idx], [oldC[idx]], y => y >= 0);
     filterEmpty([oldC[idx]], y => y >= 0); //since c[idx] = -1
-    seq_ext_eq(c[..idx], oldC[..idx]);
-    seq_ext_eq(c[idx+1..], oldC[idx+1..]);
     seq_split(c[..], idx);
     assert(c[..] == c[..idx] + [c[idx]] + c[idx+1..]);
     filter_app(oldC[..idx] + [c[idx]], oldC[idx + 1..], y => y >= 0);
     filter_app(oldC[..idx], [c[idx]], y => y >= 0); 
 }
 
+
+//The values in the b array are bounded (used for array bounds)
 lemma b_bound_invariant(a: array<int>, oldB : seq<int>, b : seq<int>, i: int, idx : int)
 requires(0 <= i < a.Length)
 requires(0 <= a[i] < |oldB|)
@@ -830,6 +790,7 @@ requires(forall j : int :: 0 <= j < |oldB| ==> oldB[j] <= numLeq(j, a[..]) - 1)
 ensures((forall j : int :: 0 <= j < |b| ==> b[j] <= numLeq(j, a[..]) - 1)){
 }
 
+//Invariant that the array "b" consists of the positions of all elements, only considering equal elements up to index i
 lemma b_position_invariant(a:array<int>, oldB : seq<int>, b : seq<int>, i : int, idx : int)
 requires(0 <= i < a.Length)
 requires(0 <= a[i] < |oldB|)
@@ -852,6 +813,7 @@ ensures(forall j :: 0 <= j < |b| ==> b[j] == position(j, i-1, a[..])) {
   }
 }
 
+//The important invariant for sorting and stability: each element c[j] corresponds to the element of k actually at position j in a sorted array
 lemma c_structure_invariant(a: array<int>, b: seq<int>, c : seq<int>, oldC: seq<int>, idx : int, i : int)
 requires(0 <= i < a.Length)
 requires(0 <= a[i] < |b|)
