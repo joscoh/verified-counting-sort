@@ -62,6 +62,11 @@ ensures(forall x : T :: x in a ==> f(x)) {
   }
 }
 
+lemma filter_filter<T>(a: seq<T>, f : T -> bool, g: T -> bool)
+ensures(filter(filter(a, f), g) == filter(a, y => f(y) && g(y))) {
+
+}
+
 //Proofs about filtering int lists by lt/leq/eq relations
 
 lemma {:induction a} filter_lt_decompose(a: seq<int>, b : int)
@@ -255,6 +260,22 @@ ensures(i == j) {
     }    
   }
 }
+
+//For equal elements, positions and indices have the same ordering
+lemma positions_eq_preserve_order(a : seq<int>, k : int, i : int, x : int)
+requires(0 <= i < |a|)
+requires(0 <= k < |a|)
+requires(position(x, k, a[..]) < position(x, i, a[..]))
+ensures(k < i) {
+  if(k < i) {
+  }
+  else {
+    assert(i <= k);
+    assert(a[..k+1] == a[..i+1] + a[i+1..k+1]);
+    numEq_app(x, a[..i+1], a[i+1..k+1]);
+  }
+}
+
 
 //How position changes when we decrease index
 lemma position_decr_index_same(a : seq<int>, i : int)
@@ -742,6 +763,107 @@ ensures(sorted(c[..])) {
   sorted_alt_implies_sorted(c[..]); //c[..] is sorted
 }
 
+/* Proofs for stability */
+
+//(Note: because we sort using the integer values, stability is kind of meaningless, and we can in fact "prove" it using 
+// the permutation info. But we do the real proof that holds even when sorting by a specific key)
+
+//first, we need to know that at any point in the loop, for all j < b[a[i]], c[j] != a[i] - ie, the current element is the
+//first one in the current array with that value - because we go backwards, this ensures stability
+lemma all_same_elts_come_after(a: array<int>, oldC : seq<int>, i : int, ai : int, bai : int)
+requires(0 <= i < a.Length)
+requires(ai == a[i])
+requires(0 <= ai)
+// /requires(0 <= ai < |b|)
+//requires(bai == b[ai])
+requires(bai == position(ai, i, a[..]))
+requires(0 <= bai < |oldC|)
+requires(a.Length == |oldC|)
+requires(forall j :: 0 <= j < |oldC| ==> oldC[j] != -1 ==> exists k :: ((i < k < a.Length) && oldC[j] == a[k] && j == position(a[k], k, a[..])))
+ensures(forall j :: 0 <= j < bai ==> oldC[j] != a[i]) {
+  forall j | 0 <= j < bai
+  ensures(oldC[j] != a[i]) {
+    if(oldC[j] == a[i]) {
+      assert(oldC[j] != -1);
+      var k :| ((i < k < a.Length) && oldC[j] == a[k] && j == position(a[k], k, a[..]));
+      assert(position(a[i], k, a[..]) < position(a[i], i, a[..]));
+      positions_eq_preserve_order(a[..], k, i, a[i]);
+    }
+    else {}
+  }
+}
+
+lemma filter_filter_special(a: seq<int>, x: int)
+ensures(filter((filter(a, y => y >= 0)), y => y == x) == filter(a, y => y >= 0 && y == x)) {
+}
+
+/*stable invariant: forall j : int :: filter(a[(i+1)..], y => y == x) == filter(filter(c[..], y => y >= 0), y => y == x) */
+
+lemma stable_invariant_preserved(a: array<int>, b : seq<int>, oldC : seq<int>, c : seq<int>, i : int, ai: int, bai : int)
+requires(0 <= i < a.Length)
+requires(ai == a[i])
+requires(0 <= ai < |b|)
+requires(bai == b[a[i]])
+requires(bai == position(ai, i, a[..]))
+requires(0 <= bai < |c|)
+requires(a.Length == |c|)
+requires(|c| == |oldC|)
+requires(oldC[bai] == -1)
+requires(c == oldC[bai := ai])
+requires(forall j :: 0 <= j < |oldC| ==> oldC[j] != -1 ==> exists k :: ((i < k < a.Length) && oldC[j] == a[k] && j == position(a[k], k, a[..])))
+requires(forall x : int :: filter(a[i+1..], y => y == x) == filter(filter(oldC, y => y >= 0), y => y == x))
+ensures(forall x : int :: filter(a[i..], y => y == x) == filter(filter(c, y => y >= 0), y => y == x)) {
+  forall x 
+  ensures (filter(a[i..], y => y == x) == filter(filter(c, y => y >= 0), y => y == x)) {
+    assert(filter(a[i+1..], y => y == x) == filter(filter(oldC, y => y >= 0), y => y == x));
+    filter_filter_special(c, x);
+    filter_filter_special(oldC, x);
+    assert(a[i..] == [a[i]] + a[i+1..]);
+    filter_app([a[i]], a[i+1..], y => y == x);
+    filter_app(c[..b[a[i]]], c[b[a[i]]..], y => (y >= 0 && y == x));
+    assert(c == c[..b[a[i]]] + c[b[a[i]]..]);
+    assert(c[b[a[i]]..] == [c[b[a[i]]]] + c[b[a[i]] + 1..]);
+    filter_app([c[b[a[i]]]], c[b[a[i]] + 1..], y => (y >= 0 && y == x));
+    filter_app(oldC[..b[a[i]]], oldC[b[a[i]]..], y => (y >= 0 && y == x));
+    assert(oldC == oldC[..b[a[i]]] + oldC[b[a[i]]..]);
+    assert(oldC[b[a[i]]..] == [oldC[b[a[i]]]] + oldC[b[a[i]] + 1..]);
+    filter_app([oldC[b[a[i]]]], oldC[b[a[i]] + 1..], y => (y >= 0 && y == x));
+    
+    //so now we know that (with abuse of notation):
+    // filter(a[i..]) = filter(a[i]) + filter(a[i+1..])
+    // filter(c) = filter(c[..b[a[i]]]) + filter(c[b[a[i]]]) + filter(c[b[a[i]] + 1..])
+    // filter(c) = filter(oldC[..b[a[i]]]) + filter(oldC[b[a[i]]]) + filter(oldC[b[a[i]] + 1..])
+    if(x == a[i]) {
+      //idea: filter(c[..b[a[i]]]) = [] and same for oldC by [all_same_elts_come_after] - the rest is easy
+      all_same_elts_come_after(a, oldC, i, a[i], b[a[i]]);
+      filterEmpty(c[..b[a[i]]], y => (y >= 0 && y == x));
+      filterEmpty(oldC[..b[a[i]]], y => (y >= 0 && y == x));
+      assert(filter([c[b[a[i]]]], y => (y >= 0 && y == x)) == [a[i]]);
+      filterEmpty([oldC[b[a[i]]]], y => (y >= 0 && y == x));
+      assert(filter(filter(c, y => y >= 0), y => y == x) == filter(c, y => (y >= 0 && y == x)));
+      assert(filter(c[..b[a[i]]], y => (y >= 0 && y == x)) == []);
+      assert(c == c[..b[a[i]]] + [c[b[a[i]]]] + c[b[a[i]] + 1..]);
+      //assert(filter(c, y => (y >= 0 && y == x)) == filter(c[..b[a[i]]], y => (y >= 0 && y == x)) +  filter([c[b[a[i]]]], y => (y >= 0 && y == x)) + filter(c[b[a[i]] + 1..], y => (y >= 0 && y == x)));
+
+      //assert(filter(c, y => (y >= 0 && y == x)) == filter([c[b[a[i]]]], y => (y >= 0 && y == x)) + filter(c[b[a[i]] + 1..], y => (y >= 0 && y == x)));
+      assert(filter(filter(c, y => y >= 0), y => y == x) == [a[i]] + filter(c[b[a[i]] + 1..], y => (y >= 0 && y == x)));
+
+      assert(filter(filter(oldC, y => y >= 0), y => y == x) == filter(oldC[b[a[i]] + 1..], y => (y >= 0 && y == x)));
+    }
+    else {
+      filterEmpty([c[b[a[i]]]], y => (y >= 0 && y == x));
+    }
+  }
+}
+
+lemma afterLoopStable(a : array<int>, c : array<int>)
+requires(a.Length == c.Length)
+requires(forall x : int :: filter(a[..], y => y == x) == filter(filter(c[..], y => y >= 0), y => y == x))
+requires(|filter(c[..], y => y >= 0)| == a.Length)
+ensures(stable(a[..], c[..])) {
+    filter_same_length_all(c[..], y => y >= 0);
+    filterAll(c[..], y => y >= 0);
+}
 
 
 
@@ -753,6 +875,7 @@ requires(forall i : int {:induction i} :: 0 <= i < b.Length ==> (b[i] == numLeq(
 requires(forall i : int :: 0 <= i < a.Length ==> 0 <= a[i] < b.Length)
 ensures(permutation(a[..], c[..]))
 ensures(sorted(c[..]))
+ensures(stable(a[..], c[..]))
 {
   //we copy b into a new array becaues Dafny really doesnt like it when you modify inputs in the function; it has
   //difficulty proving lots of things
@@ -790,6 +913,7 @@ ensures(sorted(c[..]))
   invariant(permutation((a[(i+1)..]),(filter(c[..], y => y >= 0)))) //permutation invariant
   invariant(forall j :: 0 <= j < b.Length ==> b1[j] == position(j, i, a[..])) //the array b at each step (b is changing)
   invariant(forall j :: 0 <= j < c.Length ==> c[j] != -1 ==> exists k :: ((i < k < a.Length) && c[j] == a[k] && j == position(a[k], k, a[..]))) //every filled in element of c is a previously seen elt
+  invariant(forall x : int :: filter(a[(i+1)..], y => y == x) == filter(filter(c[..], y => y >= 0), y => y == x))
   {
     //make sure everything is in bounds
     assert(0 <= i < a.Length);
@@ -832,7 +956,8 @@ ensures(sorted(c[..]))
     b_position_invariant(a, oldB, b1[..], i, idx);
     assert((forall j :: 0 <= j < b.Length ==> b1[j] == position(j, i-1, a[..])));
     c_structure_invariant(a, oldB, c[..], oldC, idx, i);
-    assert (forall j :: 0 <= j < c.Length ==> c[j] != -1 ==> exists k :: ((i - 1 < k < a.Length) && c[j] == a[k] && j == position(a[k], k, a[..])));  
+    assert (forall j :: 0 <= j < c.Length ==> c[j] != -1 ==> exists k :: ((i - 1 < k < a.Length) && c[j] == a[k] && j == position(a[k], k, a[..]))); 
+    stable_invariant_preserved(a, oldB, oldC, c[..], i, a[i], oldB[a[i]]); 
   
     i := i - 1;
     //some of the proofs seem to go better if we tell Dafny that the invariant holds explicitly (TODO: see if we need this)
@@ -847,7 +972,9 @@ ensures(sorted(c[..]))
   assert(permutation(a[..], c[..]));
   afterLoopSorted(a, c);
   assert(sorted(c[..]));
-}
+  afterLoopStable(a, c);
+  assert(stable(a[..], c[..]));
+} 
 
 //The final algorithm
 method countingSort(a: array<int>, k : int) returns (s: array<int>)
@@ -855,6 +982,7 @@ requires(0 < k)
 requires (forall i: int :: 0 <= i < a.Length ==> 0 <= a[i] < k)
 ensures(sorted(s[..]))
 ensures(permutation(a[..], s[..]))
+ensures(stable(a[..], s[..]))
 {
   if(a.Length == 0) {
     s := a;
