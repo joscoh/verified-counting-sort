@@ -112,10 +112,6 @@ function seqArr<T>(x: int, a : seq<T>) : seq<T> {
     else a[..x]
 }
 
-lemma seqArr_bounds<T>(x: int, a : seq<T>)
-requires(0 <= x < |a|)
-ensures(seqArr(x, a) == a[..x]) {}
-
 //in reality, x = a[i] (for anything useful here)
 function position(x : int, i : int, a : seq<int>) : int {
     numLt(x, a) + numEq(x, seqArr(i+1, a)) - 1
@@ -132,10 +128,6 @@ ensures(numEq(x-1, a) == |filter(a, y => y == x-1)|) {
 lemma numLt_minus_one(x: int, a : seq<int>)
 ensures(numLt(x-1, a) == |filter(a, y => y < x-1)|) {
 }
-
-//TODO see
-/*lemma numEq_direct(x: int,  a: seq<int>)
-ensures (numEq(x, a) == |filter(a, y => y == x)|) {} */
 
 //Some alternate characterizations that make some things easier
 lemma numLeq_direct(x:int, a : seq<int>) 
@@ -172,11 +164,6 @@ ensures(numEq(x, [x]) == 1) {
   filterAll([x], y => y == x);
 }
 
-/* Bounds on [numLeq] - needed for bounds checks in counting sort */
-lemma {:induction x} numLt_nonneg(x: int, a : seq<int>)
-ensures(0 <= numLt(x,a)) {
-}
-
 lemma {:induction a} numEq_in_pos(x: int, a : seq<int>)
 requires (x in a)
 ensures (numEq(x, a) > 0) {
@@ -188,19 +175,6 @@ ensures (numEq(x, a) > 0) {
       assert(x in a[1..]);
     }
   }
-}
-
-lemma numLeq_nonneg(x: int, a : seq<int>)
-requires (x in a)
-ensures(1 <= numLeq(x,a)) {
-  numLt_nonneg(x, a);
-  numEq_in_pos(x, a);
-}
-
-lemma numLeq_upper_bound(x: int, a : seq<int>)
-ensures(numLeq(x, a) <= |a|) {
-  numLeq_direct(x, a);
-  filter_length_leq(a, y => y <= x);
 }
 
 /* Transitivity and injectivity of [numLeq] - used in proving that counting sort does not repeat elts and 
@@ -289,9 +263,6 @@ ensures(position(a[i], i - 1, a[..]) == position(a[i], i, a[..]) - 1) {
   assert (a[..(i+1)] == a[..i] + [a[i]]);
   numEq_app(a[i], a[..i], [a[i]]);
   numEq_singleton(a[i]);
-  //assert(numEq(a[i], [a[i]]) == 1);
-  //assert(numEq(a[i], a[..(i+1)]) == numEq(a[i], a[..i]) + numEq(a[i], [a[i]]));
-  //assert(numEq(a[i], a[..i]) == numEq(a[i], a[..i+1]) - 1);
 }
 
 lemma position_decr_index_diff(a : seq<int>, i : int, x : int)
@@ -304,40 +275,9 @@ ensures(position(x, i - 1, a[..]) == position(x, i, a[..])) {
   assert(numEq(x, [a[i]]) == 0);
 }
 
-/*
-position_inj(a: seq<int>, i : int, j : int)
-requires(0 <= i < |a|)
-requires(0 <= j < |a|)
-requires(position(a[i], i, a) == position(a[j], j, a))
-
-
-      assert(b[j] == oldB[j] - 1);
-      assert(position(j, i-1, a[..]) == position(j, i, a[..]) - 1);
-*/
-/*
-lemma numLt_numLeq_trans_bound(a:seq<int>, x : int, y : int)
-requires(y < x)
-requires(y in a)
-*/
-
-lemma numLeq_inj(a:seq<int>, x : int, y : int)
-requires(x != y)
-requires(x in a)
-requires (y in a)
-ensures(numLeq(x, a) != numLeq(y, a)) {
-  if(x < y) {
-    numLeq_lt_trans(a, x, y);
-  }
-  else {
-    numLeq_lt_trans(a, y, x);
-  }
-}
-
 predicate permutation<T>(a: seq<T>, b : seq<T>) {
   multiset(a) == multiset(b)
 }
-
-//TODO: maybe prove this to remove assumption from sorted theorem, but maybe not
 
 /*A few facts about multisets */
 
@@ -360,7 +300,7 @@ ensures (a == b) {
   }
 }
 
-//Now, we prove that if a and b are permutations, then they have the same length
+//Now, we prove that if a and b are permutations, then they have the same length (not the case with noDups)
 lemma permutation_length<T>(a: seq<T>, b : seq<T>) 
 requires(permutation(a, b))
 ensures(|a| == |b|) {
@@ -526,73 +466,6 @@ ensures(sorted_alt(a[..])){
 predicate stable(a : seq<int>, b : seq<int>) {
   forall x : int :: filter(a, y => y == x) == filter(b, y => y == x)
 }
-
-//Now, we prove that if the elements are all at the correct position (wrt a), then the resulting array is stable
-
-//helper lemma for induction
-
-/*TODO: do proofs on paper first, then continue
-lemma all_positions_ind(a : seq<int>, c : seq<int>)
-requires(|a| > 0)
-requires(|a| == |c|) 
-requires(c[0] == a[0]) 
-requires(forall j :: 0 <= j < |c| ==> exists k :: ((-1 < k < |a|) && c[j] == a[k] && j == position(a[k], k, a[..])))
-ensures(forall j :: 0 <= j < |c[1..]| ==> exists k :: ((-1 < k < |a[1..]|) && c[1..][j] == a[1..][k] && j == position(a[1..][k], k, a[1..]))) {
-  forall j | 0 < j < |c[1..]| 
-  ensures (exists k :: ((-1 < k < |a[1..]|) && c[1..][j] == a[1..][k] && j == position(a[1..][k], k, a[1..]))) {
-        var k :| (-1 < k < |a|) && c[j+1] == a[k] && j+1  == position(a[k], k, a[..]);
-        if(k == 0) {
-          //contradiction
-          assert(c[j+1])
-        }
-        assert(c[1..][j] == c[j + 1]);
-        assert(-1 < k-1)
-        //assert ()
-
-  }
-}
-
-lemma all_positions_implies_stable_aux(a : seq<int>, c : seq<int>, j :  int)
-//requires(permutation(a, c))
-requires(|a| == |c|)
-requires(forall x :: x in a ==> x >= 0)
-requires(forall j :: 0 <= j < |c| ==> exists k :: ((-1 < k < |a|) && c[j] == a[k] && j == position(a[k], k, a[..])))
-ensures(filter(a, y => y == j) == filter(c, y => y == j)) {
-  if (|a| <= 0) {
-  }
-  else {
-    var k :| (-1 < k < |a|) && c[0] == a[k] && 0 == position(a[k], k, a[..]);
-    assert(a == [a[0]] + a[1..]);
-    assert(c == [c[0]] + c[1..]);
-    assert(forall x :: x in a[1..] ==> x in a);
-    assert(forall x :: 0 <= x < |c[1..]| ==> c[1..][x] == c[x+1]);
-    //problem - induction on a is bad bc we use in definition of position
-    assume(forall j :: 0 <= j < |c[1..]| ==> exists k :: ((-1 < k < |a[1..]|) && c[1..][j] == a[1..][k] && j == position(a[1..][k], k, a[1..])));
-
-    if(a[0] == a[k]) {
-      //easy case
-      filter_app([a[0]], a[1..], y => y == j);
-      filter_app([c[0]], c[1..], y => y == j);
-      if(a[0] == j) {
-        filterAll([a[0]], y => y == j);
-        filterAll([c[0]], y => y == j);
-        
-        all_positions_implies_stable_aux(a[1..], c[1..], j);
-      }
-      else {
-        filterEmpty([a[0]], y => y == j);
-        filterEmpty([c[0]], y => y == j);  
-      }
-
-    }
-    else {
-
-    }
-  }
-
-
-}
-*/
 /* Lemmas to prove function invariants */
 
 lemma filter_split_idx<T>(a: array<T>, f: T -> bool, i : int)
@@ -838,14 +711,13 @@ ensures(forall j :: 0 <= j < |c| ==> c[j] != -1 ==> exists k :: ((i-1 < k < a.Le
 }
 
 //Prove that the invariants imply the postconditions in a separate lemma
-//TODO: dont actually need the length fact, can prove from permutation
 
 //Our loop invariants imply the output is a permutation of the input
 lemma afterLoopPermutation(a: array<int>, c : array<int>)
 requires(permutation((a[0..]),(filter(c[..], y => y >= 0)))) //permutation invariant
-requires(|filter(c[..], y => y >= 0)| == a.Length)
 requires(a.Length == c.Length)
 ensures(permutation(a[..], c[..])) {
+  permutation_length(a[..], (filter(c[..], y => y >= 0)));
   filter_same_length_all(c[..], y => y >= 0); //the filtered list is the original list
   filterAll(c[..], y => y >= 0);  
 }
@@ -913,6 +785,7 @@ ensures(sorted(c[..]))
   invariant(b1.Length == bLen) //need for bounds
   invariant(forall j :: 0 <= j < a.Length ==> 0 <= a[j] < bLen); //also need for bounds
   invariant(forall j : int :: 0 <= j < bLen ==> b1[j] <= numLeq(j, a[..]) - 1) //used for bounds checks
+  //technically, this invariant is implied by the next one (by permutation_length), but the proofs are much faster if we include both
   invariant(|filter(c[..], y => y >= 0)| == a.Length - (i + 1)); //ensures that we fill all of c
   invariant(permutation((a[(i+1)..]),(filter(c[..], y => y >= 0)))) //permutation invariant
   invariant(forall j :: 0 <= j < b.Length ==> b1[j] == position(j, i, a[..])) //the array b at each step (b is changing)
