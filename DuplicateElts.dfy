@@ -531,6 +531,28 @@ ensures(forall j :: numEq(j, a[..i+1]) == numEq(j, a[..i]) + numEq(j, [a[i]])) {
 }
 
 /*The first loop of countingSort - builds an array that counts the occurrences of each element */
+
+lemma countOccurrencesInvariant(a : array<int>, b : seq<int>, newB : seq<int>, i : int, elt: int)
+requires(0 <= i < a.Length)
+requires(0 <= a[i] < |b|)
+requires(|b| == |newB|)
+requires(a[i] == elt)
+requires(newB == b[elt := b[elt]   + 1])
+requires(forall j :: 0 <= j < |b| ==> b[j] == numEq(j, a[..i]))
+ensures(forall j :: 0 <= j < |newB| ==> newB[j] == numEq(j, a[..i+1])) {
+  forall j | 0 <= j <|newB|
+  ensures(newB[j] == numEq(j, a[..i+1])) {
+    assert(a[..i+1] == a[..i] + [a[i]]);
+    numEq_app(j, a[..i], [a[i]]);
+    if(j == elt) {
+      numEq_singleton(a[i]);
+      assert(newB[j] == b[elt] + 1);  
+    }
+    else {
+      filterEmpty([a[i]], y => y == j); 
+    }
+  }
+}
 /*
 method countOccurrences (a: array<int>, k: int) returns (b: array<int>)
 requires 0 < a.Length
@@ -545,19 +567,24 @@ ensures(forall i : int :: 0 <= i <= k ==> b[i] == numEq(i, a[..]))
   decreases(a.Length - i)
   invariant (0 <= i <= a.Length)
   invariant(forall j : int :: 0 <= j <= k ==> b[j] == numEq(j, a[..i])) {
-    assert(a[..(i+1)] == a[..(i)] + [a[i]]);
-    ghost var t := a[i];
-    filter_app(a[..(i)], [a[i]], y => y == t);
-    numEq_split_idx(a, i);
+    //assert(a[..(i+1)] == a[..(i)] + [a[i]]);
+    //ghost var t := a[i];
+    //filter_app(a[..(i)], [a[i]], y => y == t);
+    //numEq_split_idx(a, i);
     //assert(forall t :: numEq(t, a[..(i+1)]) == numEq(t, a[..i]) + numEq(t, [a[i]]));
     //assert(numEq(t, [a[i]]) == 1);
     //assert(0 <= a[i] < k);
-    assert(b[a[i]] == numEq(a[i], a[..i]));
-    ghost var oldB := b;
+    //assert(b[a[i]] == numEq(a[i], a[..i]));
+    ghost var oldB := b[..];
+    ghost var ai := a[i];
     b[a[i]] := b[a[i]] + 1;
+
+    assert(b[..] == oldB[ai := oldB[ai] + 1]);
+    countOccurrencesInvariant(a, oldB, b[..], i, a[i]);
+
     i := i + 1;
     //assert(b[a[i-1]] == numEq(a[i-1], a[..i]));
-    assert(forall j : int :: 0 <= j < k ==> j != a[i-1] ==> b[j] == oldB[j]);
+    //assert(forall j : int :: 0 <= j < k ==> j != a[i-1] ==> b[j] == oldB[j]);
     assert(forall j : int :: 0 <= j <= k ==> b[j] == numEq(j, a[..i])); //for some reason, need this for it to verify
   }
   assert(a[..i] == a[..]);
@@ -920,66 +947,7 @@ ensures(sorted(c[..]))
     assert(c[..] == oldC[idx := a[i]]);
     assert(b1[a[i]] == idx - 1);
     assert(forall j :: 0 <= j < |oldB| ==> j != a[i] ==> b1[j] == oldB[j]);
-    //update_def(oldB, b1[..], a[i], idx-1);
-    //assert(b1[..] == oldB[a[i] := idx - 1]);
-    //(a: seq<T>, newA : seq<T>, i : int, newVal : T)
-    //Restore the invariants
-    /*
-    //filter (length) invariant
-    assert(|filter(oldC, y => y >= 0)| == a.Length - (i + 1)); //assumption
-    seq_split(oldC, idx);
-    assert(oldC == (oldC[..idx] + [oldC[idx]])+ oldC[idx + 1..]);
-    filter_app(oldC[..idx] + [oldC[idx]], oldC[idx + 1..], y => y >= 0); //we can split filter into 0..b[a[i]], the elt b[a[i]], and the rest of the list
-    filter_app(oldC[..idx], [oldC[idx]], y => y >= 0);
-    filterEmpty([oldC[idx]], y => y >= 0); //since c[idx] = -1
-    seq_ext_eq(c[..idx], oldC[..idx]);
-    seq_ext_eq(c[idx+1..], oldC[idx+1..]);
-    seq_split(c[..], idx);
-    assert(c[..] == c[..idx] + [c[idx]] + c[idx+1..]);
-    filter_app(oldC[..idx] + [c[idx]], oldC[idx + 1..], y => y >= 0);
-    filter_app(oldC[..idx], [c[idx]], y => y >= 0); */
 
-    //permutation 
-    //TODO: figure out what the fuck is wrong
-    /*
-    assert(multiset(a[i+1..]) == multiset(filter(oldC, y => y >= 0)));
-    seq_split_start(a[..], i);
-    assert(a[i..] == [a[i]] + a[i+1..]);
-    multiset_app([a[i]], a[i+1..]);
-    assert(multiset(a[i..]) == multiset{a[i]} + multiset(a[i+1..]));
-    seq_split(oldC, idx);
-    assert(oldC == (oldC[..idx] + [oldC[idx]])+ oldC[idx + 1..]);
-    filter_app(oldC[..idx] + [oldC[idx]], oldC[idx + 1..], y => y >= 0); //we can split filter into 0..b[a[i]], the elt b[a[i]], and the rest of the list
-    filter_app(oldC[..idx], [oldC[idx]], y => y >= 0);
-    multiset_app(filter(oldC[..idx] + [oldC[idx]], y => y >= 0), filter(oldC[idx + 1..], y => y >= 0)); //we can split filter into 0..b[a[i]], the elt b[a[i]], and the rest of the list
-    multiset_app(filter(oldC[..idx], y => y >= 0), filter([oldC[idx]], y => y >= 0));
-    assert((filter(oldC, y => y >= 0)) ==
-      (filter(oldC[..idx], y => y >= 0)) +
-      (filter([oldC[idx]], y => y >= 0)) +
-      (filter(oldC[idx+1..], y => y >= 0)));
-    assert(multiset(filter(oldC, y => y >= 0)) ==
-      multiset(filter(oldC[..idx], y => y >= 0)) +
-      multiset(filter([oldC[idx]], y => y >= 0)) +
-      multiset(filter(oldC[idx+1..], y => y >= 0)));
-    assert(multiset(filter([oldC[idx]], y => y >= 0)) == multiset{});
-    seq_ext_eq(c[..idx], oldC[..idx]);
-    seq_ext_eq(c[idx+1..], oldC[idx+1..]);
-    seq_split(c[..], idx);
-    assert(c[..] == c[..idx] + [c[idx]] + c[idx+1..]);
-    filter_app(oldC[..idx] + [c[idx]], oldC[idx + 1..], y => y >= 0);
-    filter_app(oldC[..idx], [c[idx]], y => y >= 0);
-    multiset_app(filter(oldC[..idx] + [c[idx]], y => y >= 0), filter(oldC[idx + 1..], y => y >= 0)); //we can split filter into 0..b[a[i]], the elt b[a[i]], and the rest of the list
-    multiset_app(filter(oldC[..idx], y => y >= 0), filter([c[idx]], y => y >= 0));
-    assert(multiset(filter(c[..], y => y >= 0)) ==
-      multiset(filter(oldC[..idx], y => y >= 0)) +
-      multiset(filter([c[idx]], y => y >= 0)) +
-      multiset(filter(oldC[idx+1..], y => y >= 0)));
-    assert(multiset(filter([c[idx]], y => y >= 0)) == multiset{a[i]});
-    assert(multiset(filter(c[..], y => y >= 0)) == multiset{a[i]} +
-      multiset(filter(oldC, y => y >= 0)));
-    assert(multiset(a[i..]) == multiset(filter(c[..], y => y >= 0))); 
-    //assume(permutation((a[oldI..]),(filter(c[..], y => y >= 0)))); //permutation 
-    //assert(a[((i-1) + 1)..] == a[i..]);*/
     
     
     permutation_invariant(a, c[..], oldC, idx, i);
@@ -998,73 +966,6 @@ ensures(sorted(c[..]))
 
     //assert(forall j, k :: 0 <= j < c.Length ==> 0 <= k < a.Length ==> c[j] == a[k] ==> j == position(a[k], k, a[..]));
     
-      //permutation 
-      /*
-    assert(a[i..] == [a[i]] + a[i+1..]);
-    multiset_app([a[i]], a[i+1..]);
-    assert(multiset(a[i..]) == multiset{a[i]} + multiset(a[(i+1)..]));
-    multiset_app(filter(c[..idx], y => y >= 0), filter(c[idx+1..], y => y >= 0));
-      
-    
-
-    //assert(a[i] != -1);
-    //assert(forall j: int:: 0 <= j <= i - 1 ==> c[b[a[j]]] == -1);
-
-    //idea: noDups: i <> j -> a[i] <> a[j], so then by (injectivity), b[a[i]] <> b[a[j]]
-    //TODO: prefixSumInj(a, b, i);
-
-    //The key step: we need to show that b1[a[i]] == -1 (ie, we are not overwriting a previously seen element)
-
-    //assume(b1[a[i]] == -1);
-    
-
-
-
-    //b1 bound invar
-    assert(forall j : int :: 0 <= j < bLen ==>  oldB[j] <= numLeq(j, a[..]) - 1); //used for bounds checks
-    assert(forall j : int :: 0 <= j < bLen ==> j != a[i] ==> b[j] == oldB[j]);
-    assert(forall j : int :: 0 <= j < bLen ==> j != a[i] ==> b1[j] <= numLeq(j, a[..]) - 1); //used for bounds checks
-    assert(idx <= numLeq(a[i], a[..]) - 1);
-    assert(b1[a[i]] <idx);
-    assert(b1[a[i]] <= numLeq(a[i], a[..]) - 1);
-
-
-
-    //see if c is equal to oldC
-    
-
-    //b bounds check 
- 
-
-    //check that i < j invariant 
-    //assert(forall j : int :: 0 <= j < a.Length ==> 0 <= a[j] < b1.Length ==> 0 <= b1[a[j]] < c.Length ==> c[b1[a[j]]] != -1 ==> i < j)
-
-    //assert(b1[a[i-1]] != idx ==> c[b1[a[i-1]]] == -1)
-
-    //also need to know that c[b[a[j]] <> c[b[a[i]]] - filtered part has nodups
-    //assert(forall j: int:: 0 <= j <= i - 1 ==> b[a[j]] != b[a[i]] ==> c[b[a[j]]] == -1);
-    //assert(forall j: int:: 0 <= j <= i - 1 ==> b[a[j]] != b[a[i]]);
-
-    //filter invariant
-    //assert(filter([c[b[a[i]]]], y => y >= 0) == [c[b[a[i]]]]);
-    //assert(filter([c[b[a[i]]]], y => y >= 0) == [a[i]]);
-    //now the proof goes through!
-
-    //bounds on b1 invariant
-    assert(b1[a[i]] < idx);
-
-    //permutation invariant
-    assert(multiset{c[idx]} == multiset{a[i]});
-    assert(multiset(filter(c[..], y => y >= 0)) == multiset(filter(c[..idx], y => y >= 0)) + 
-      multiset(filter([c[idx]], y => y >= 0)) +
-      multiset(filter(c[idx + 1..], y => y >= 0)));
-    assert((filter([c[idx]], y => y >= 0)) == [c[idx]]);
-    //multiset_app(filter(c[..idx +1], y => y >= 0), filter(c[idx + 1..], y => y >= 0)));
-    //multiset_app(filter(c[]))
-
-    //sorting invariant
-    //assert(b[a[i]] == numLeq(c[b[a[i]]], a[..]) - 1);
-    */
     
     i := i - 1;
     assert(permutation((a[(i+1)..]),(filter(c[..], y => y >= 0))));
@@ -1091,6 +992,8 @@ ensures(sorted(c[..]))
   //assert(forall j : int :: 0 <= j < c.Length ==> c[j] >= 0);
   //assert(forall j : int :: 0 <= j < c.Length ==> c[j] != -1);
   //assert(forall j : int :: 0 <= j < c.Length ==> j == numLeq(c[j], a[..]) - 1);
+  assert (forall j :: 0 <= j < c.Length ==> c[j] != -1 ==> exists k :: ((i - 1 < k < a.Length) && c[j] == a[k] && j == position(a[k], k, a[..])));  
+  assert(forall j :: 0 <= j  < c.Length ==> c[j] != -1);
   assert(forall j :: 0 <= j < c.Length ==> exists k :: ((-1 < k < a.Length) && c[j] == a[k] && j == position(a[k], k, a[..])));
   all_positions_implies_sorted(a[..], c[..]);
   assert(sorted_alt(c[..])); 
@@ -1103,4 +1006,5 @@ ensures(sorted(c[..]))
   assert(permutation(a[..], c[..]));
   //assert(sorted(c[..]));
   return c;
+
 }
