@@ -85,7 +85,7 @@ ensures(|filter(a, z => x < z && z <= y)| > 0){
 }
 
 lemma {: induction a} filter_leq_decompose_bounds(a : seq<int>, x : int, y : int)
-requires (x < y)
+requires (x <= y)
 ensures (|filter(a, z => z <= y)| == |filter(a, z => z <= x)| + |filter(a, z => x < z && z <= y)|) {
 }
 
@@ -117,10 +117,6 @@ ensures(numEq(x-1, a) == |filter(a, y => y == x-1)|) {
 lemma numLt_minus_one(x: int, a : seq<int>)
 ensures(numLt(x-1, a) == |filter(a, y => y < x-1)|) {
 }
-
-
-
-
 
 //Some alternate characterizations that make some things easier
 lemma numLeq_direct(x:int, a : seq<int>) 
