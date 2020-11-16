@@ -1,7 +1,5 @@
-/* A generic version of counting sort - allows elements of any type along with a key function of type T -> int
-    Counting sort will sort by key and ensure stability of the underlying elements */
-
-//TODO: factor out common stuff
+/* A generic version of counting sort - allows elements of any type G along with a key function of type G -> int
+    Counting sort will sort by key and ensure stability of the underlying elements.  */
 
 /* filter - keep all elements of a list that satisfy a predicate, in order */
 
@@ -62,13 +60,10 @@ ensures(forall x : T :: x in a ==> f(x)) {
   }
 }
 
-lemma filter_filter<T>(a: seq<T>, f : T -> bool, g: T -> bool)
-ensures(filter(filter(a, f), g) == filter(a, y => f(y) && g(y))) {
-
-}
 
 
-//Everything is parametric in the type G and function key (from mergesort example)
+//Everything is parametric in the type G and function key. This method of parameterization is taken from 
+//https://github.com/dafny-lang/dafny/blob/master/Test/dafny4/GHC-MergeSort.dfy.
 type G
 
 function method key(x : G) : int
@@ -83,11 +78,6 @@ lemma {:induction a} filter_leq_decompose(a: seq<G>, x : int)
 ensures(|filter(a, y => key(y) <= x)| == |filter(a, y => key(y) < x)| + |filter(a, y => key(y) == x)|) {
 }
 
-lemma filter_lt_leq_minus_one(a: seq<G>, x : int)
-ensures(filter(a, y => key(y) < x) == filter(a, y => key(y) <= x - 1)) {
-}
-
-//NOTE
 lemma {:induction a} filter_bounded_in(a:seq<G>, x : int, y : int)
 requires(x < y)
 requires(exists t  :: t in a && key(t) == y)
@@ -100,8 +90,8 @@ ensures (|filter(a, z => key(z) <= y)| == |filter(a, z => key(z) <= x)| + |filte
 }
 
 
-// The [numLt] and [numLeq] predicates - specifies the number of elements whose key is less than/leq the given value in an array
-//  used to specify the correct position of the element in a sorted array 
+// The numLt, numEq, and numLeq predicates - specifies the number of elements whose key is less than/leq the given value in an array
+// used to specify the correct position of the element in a sorted array 
 
 function numLt(x: int, a : seq<G>) : int {
   |filter(a, y => key(y) < x)|
@@ -115,21 +105,19 @@ function numLeq(x: int, a : seq<G>) : int {
   numLt(x, a) + numEq(x, a)
 }
 
-//An element's position in the sorted array is as follows
 function seqArr<T>(x: int, a : seq<T>) : seq<T> {
   if x < 0 then [] 
     else if x > |a| then []
     else a[..x]
 }
 
-//in reality, x = a[i] (for anything useful here)
-//NOTE: have as position of a given key - NOT an element
+//An key's position in the array a[..i+1] is as follows. For this definition to be useful, x = key(a[i]).
+//We will show that if every element a[i] occurs in c at position(key(a[i]), i, a), then c is sorted
 function position(x : int, i : int, a : seq<G>) : int {
     numLt(x, a) + numEq(x, seqArr(i+1, a)) - 1
 }
 
-//Dafny cannot infer this automatically and cannot even infer from generic versions
-//(parameterized by x) - this is a very annoying limitation
+//Dafny cannot infer this automatically and cannot even infer from generic versions - not sure why
 lemma numLt_unfold_zero(a : seq<G>) 
 ensures(numLt(0, a) == |filter(a, y => key(y) < 0)|) {}
 
@@ -171,15 +159,12 @@ ensures(numEq(x, a + b) == numEq(x, a) + numEq(x,b)) {
   filter_app(a, b, y => key(y) == x);
 }
 
-//NOTE
 lemma numEq_singleton(x: G, y : int)
 requires(key(x) == y)
 ensures(numEq(y, [x]) == 1) {
   filterAll([x], z => key(z) == y);
 }
 
-
-//sorta note
 lemma {:induction a} numEq_in_pos(x: G, a : seq<G>)
 requires (x in a)
 ensures (numEq(key(x), a) > 0) {
@@ -194,17 +179,7 @@ ensures (numEq(key(x), a) > 0) {
 }
 
 // Transitivity and injectivity of [numLeq] - used in proving that counting sort does not repeat elts and 
-//  that the result is actually sorted 
-
-lemma numLeq_lt_trans(a:seq<G>, x: G, y: G)
-requires(key(x) < key(y))
-requires(y in a)
-ensures(numLeq(key(x), a) < numLeq(key(y), a)) {
-  numLeq_direct(key(y), a);
-  numLeq_direct(key(x), a);
-  filter_leq_decompose_bounds(a, key(x), key(y));
-  filter_bounded_in(a, key(x), key(y));
-}
+// that the result is actually sorted 
 
 //We need 2 more similar lemmas for the sortedness equivalence proof
 lemma numLeq_leq_trans(a:seq<G>, x : int, y : int)
@@ -222,8 +197,7 @@ ensures(numLeq(x, a) - 1 < numLt(y, a)) {
     numLeq_leq_trans(a, x, y-1);
 }
 
-//what we really need - injectivity for position function - if a[i] and a[j] have the same position - i = j
-
+//the position of an element is among the possible positions of that key in a sorted array
 lemma position_bounds(a: seq<G>, x: G, i : int)
 requires(0 <= i < |a|)
 requires(x in a[..i+1])
@@ -235,7 +209,7 @@ ensures(numLt(key(x), a) <= position(key(x), i, a) <= numLeq(key(x), a) - 1) {
   assert (numEq(key(x), a[..(i+1)]) <= numEq(key(x), a));
 }
 
-
+//injectivity for position function - if a[i] and a[j] have the same position - i = j
 lemma position_inj(a: seq<G>, i : int, j : int)
 requires(0 <= i < |a|)
 requires(0 <= j < |a|)
@@ -289,14 +263,7 @@ ensures(k < i) {
   }
 }
 
-//a is array of T's
-//b is array that counts number of elts in a with each key
-//so initially, b[j] = numLeq(a, j, key)
-//then b[j] = position()
-//NOTE : b will be array of T's, then b[j] == position()
-
 //How position changes when we decrease index
-//NOTE
 lemma position_decr_index_same(a : seq<G>, i : int)
 requires(0 <= i < |a|)
 ensures(position(key(a[i]), i - 1, a[..]) == position(key(a[i]), i, a[..]) - 1) {
@@ -315,6 +282,8 @@ ensures(position(x, i - 1, a[..]) == position(x, i, a[..])) {
   assert(numEq(x, [a[i]]) == 0);
 }
 
+/* Definition of permutations */
+
 predicate permutation<T>(a: seq<T>, b : seq<T>) {
   multiset(a) == multiset(b)
 }
@@ -327,7 +296,6 @@ ensures(multiset(a + b) == multiset(a) + multiset(b)) {
 
 lemma multiset_elt_app<T>(a: multiset<T>, b : multiset<T>, x : T)
 ensures((a + b)[x] == a[x] + b[x]) {
-
 }
 
 lemma multiset_union_inj<T>(a: multiset<T>, b : multiset<T>, s: multiset<T>) 
@@ -340,7 +308,7 @@ ensures (a == b) {
   }
 }
 
-//Now, we prove that if a and b are permutations, then they have the same length (not the case with noDups)
+//Now, we prove that if a and b are permutations, then they have the same length
 lemma permutation_length<T>(a: seq<T>, b : seq<T>) 
 requires(permutation(a, b))
 ensures(|a| == |b|) {
@@ -379,7 +347,7 @@ ensures(forall x :: x in b ==> x in a) {
 }
 
 //In order to prove that permutations preserve the numEq, numLeq, and numLt relations, we need to relate
-//the original seq to the seq consisting of the keys. Here is a specialized map function to do that
+//the original seq to the seq consisting of the keys. Here is a specialized map function to do that.
 function mapKey(a: seq<G>) : seq<int> {
     if (|a| <= 0) then [] else [key(a[0])] + mapKey(a[1..]) 
 }
@@ -391,7 +359,6 @@ ensures(|a| == |mapKey(a)|) {
 lemma mapKey_nil(a: seq<G>)
 requires(|a| == 0)
 ensures(mapKey(a) == []) {
-
 }
 
 lemma mapKey_app(a: seq<G>, b : seq<G>)
@@ -410,7 +377,7 @@ lemma mapKey_in(a: seq<G>, x : G, k : int)
 requires(x in a)
 requires(0 <= k < |a|)
 requires(a[k] == x)
-requires(|a| == |mapKey(a)|) //always true but need for ensures to verify
+requires(|a| == |mapKey(a)|) //always true but needed for ensures to verify
 ensures(mapKey(a)[k] == key(x)) {
     if (|a| <= 0) {
     }
@@ -428,7 +395,7 @@ lemma numEq_mapKey(a: seq<G>, x : int)
 ensures(numEq(x, a) == |filter(mapKey(a), y => y == x)|) {
 }
 
-//really annoying to prove (of couse, holds for map in general)
+//An annoying lemma to prove: if a and b are permutations, then so are mapKey(a) and mapKey(b)
 lemma perm_mapKey(a: seq<G>, b : seq<G>) 
 requires(permutation(a,b))
 ensures(permutation(mapKey(a), mapKey(b))) {
@@ -469,20 +436,6 @@ ensures(permutation(mapKey(a), mapKey(b))) {
     }
 }
 
-//todo: here
-/*
-lemma {:induction a} numEq_multiset<T>(x: T, a : seq<T>, key : T -> int)
-ensures(numEq(key(x), a, key) == multiset(a)[x]) {
-  if(|a| <= 0) {
-  }
-  else {
-    assert(a ==[a[0]] + a[1..]);
-    numEq_app(key(x), [a[0]], a[1..], key);
-    multiset_app([a[0]], a[1..]);
-  }
-}
-*/
-
 lemma filter_eq_multiset(a: seq<int>, x : int) 
 ensures(|filter(a, y => y == x)| == multiset(a)[x]) {
     if (|a| <= 0) {
@@ -497,10 +450,9 @@ requires(permutation(a, b))
 ensures(|filter(a, y => y == x)| == |filter(b, y => y == x)|) {
     filter_eq_multiset(a, x);
     filter_eq_multiset(b, x);
-
 }
 
-//why we needed the perm_mapKey lemma
+//why we needed the perm_mapKey lemma: permutations agree on numEq
 lemma numEq_perm(a:seq<G>, b : seq<G>, x : int)
 requires(permutation(a,b))
 ensures(numEq(x, a) == numEq(x, b)) {
@@ -519,7 +471,8 @@ ensures(forall x :: x in b ==> f(x)) {
   }
 }
 
-//This is really true without the nonnegative requirement (we can't induct on x otherwise) but it is much easier to prove this way, and it is OK because all elts are positive anyway
+//We now want to show that numLt is preserved by permutations. This can be proved directly, which would avoid the assumption that all keys are nonnegative, but it
+//is much easier to use induction and numEq_perm, which requires that x is bounded below by 0. This assumption is OK because we need it for counting sort anyway.
 lemma {:induction x} numLt_perm(a: seq<G>, b: seq<G>, x : int)
 requires (permutation(a, b))
 requires(forall x :: x in a ==> key(x) >= 0)
@@ -542,17 +495,6 @@ ensures(numLt(x, a) == numLt(x, b)) {
   }
 }
 
-//numLeq is also preserved over permutations
-lemma numLeq_perm(a: seq<G>, b: seq<G>, x : int)
-requires (permutation(a, b))
-requires(forall x :: x in a ==> key(x) >= 0)
-ensures(numLeq(x, a) == numLeq(x, b)) {
-  numLt_perm(a, b, x);
-  numEq_perm(a, b, x);
-  perm_in(a,b);
-  perm_in(b,a);
-}
-
 // Relating arrays and sequences 
 
 //If a predicate holds on all elements in an array, it also holds on all elements in the seq version of the array
@@ -569,29 +511,28 @@ ensures(forall i :: 0 <= i < a.Length ==> f(a[i])) {
 
 // Sortedness - two equivalent definitions 
 
-//we sort sequences by keys
+//We sort sequences by keys
 predicate sorted(a: seq<G>) {
   forall i : int, j : int :: 0 <= i < |a| ==> 0 <= j < |a| && i <= j ==> key(a[i]) <= key(a[j])
 }
 
 //alternate sorting condition - if every element is at one of its possible correct positions in the array, then the array is sorted
-//  generalization of version in DistinctElts, because an element can be in a range of possible positions
 predicate sorted_alt(a:seq<G>) {
   forall i : int :: 0 <= i < |a| ==> numLt(key(a[i]), a[..]) <= i <= numLeq(key(a[i]), a[..]) - 1
 }
 
-//The only direction we need - if a sequence satsifies [sorted_alt(a)], then it satisfies [sorted(a)]
+//The only direction we need - if a sequence satsifies sorted_alt(a), then it satisfies sorted(a)
 lemma sorted_alt_implies_sorted(a: seq<G>)
 requires(sorted_alt(a))
 ensures(sorted(a)) {
   forall i : int, j : int | 0 <= i < |a| && 0 <= j < |a| && i <= j
-    ensures(key(a[i]) <= key(a[j])) {
-      if(key(a[j]) < key(a[i])) {
-        numLt_leq_bound(a, key(a[j]), key(a[i]));
-      }
-      else {
-      }
+  ensures(key(a[i]) <= key(a[j])) {
+    if(key(a[j]) < key(a[i])) {
+      numLt_leq_bound(a, key(a[j]), key(a[i]));
     }
+    else {
+    }
+  }
 }
 
 //We use a stronger invariant, so we want to show that this implies sorting_alt (and thus sorted)
@@ -617,27 +558,11 @@ requires(forall i : int :: 0 <= i < a.Length ==> numLt(key(a[i]), a[..]) <= i <=
 ensures(sorted_alt(a[..])){
 }
 
-// Stability = we say that a and b are stable with respect to each other if the relative order of equal elements is preseved
-//  We can express that as the following 
+// Stability = we say that a and b are stable with respect to each other if all elements with the same key appear in the same order
+//  We can express that as the following:
 
 predicate stable(a : seq<G>, b : seq<G>) {
   forall x : int :: filter(a, y => key(y) == x) == filter(b, y => key(y) == x)
-}
-/* Lemmas to prove function invariants */
-
-lemma filter_split_idx<T>(a: array<T>, f: T -> bool, i : int)
-requires(0 <= i < a.Length) 
-ensures(filter(a[..i+1], f) == filter(a[..i], f) + filter([a[i]], f)) {
-  assert(a[..i+1] == a[..i] + [a[i]]);
-  filter_app(a[..i], [a[i]], f);
-}
-
-lemma numEq_split_idx(a: array<G>, i : int) 
-requires(0 <= i < a.Length)
-ensures(forall j :: numEq(j, a[..i+1]) == numEq(j, a[..i]) + numEq(j, [a[i]])) {
-  forall j  {
-    filter_split_idx(a, y => key(y) == j, i);
-  }
 }
 
 //The first loop of countingSort - builds an array that counts the occurrences of each element 
@@ -692,7 +617,7 @@ ensures(forall i : int :: 0 <= i <= k ==> b[i] == numEq(i, a[..]))
 }
 
 
-//The second loop in countingSort - returns array which gives positions of elements in sorted array//
+//The second loop in countingSort - returns array which gives positions of elements in sorted array
 method prefixSum(a:array<G>, b : array<int>) returns (c: array<int>)
 requires(0 < b.Length)
 requires(forall i : int :: 0 <= i < b.Length ==> b[i] == numEq(i, a[..]))
@@ -721,7 +646,7 @@ ensures(forall i : int {:induction i} :: 0 <= i < b.Length ==> (c[i] == numLeq(i
 // The third loop - lemmas and invariants 
 
 //The third loop is much more complicated to prove correct. To ensure Dafny does not time out, we do almost all
-//  of the nontrivial work (invariant preservation, proving postconditions, proving key properties) in the following lemmas.
+//of the nontrivial work (invariant preservation, proving postconditions, proving key properties) in the following lemmas.
 
 //The array b is correct to begin
 lemma constructSortedArrayBInvarEntry(a: array<G>, b : array<int>, i : int)
@@ -734,11 +659,7 @@ ensures (forall j :: 0 <= j < b.Length ==> b[j] == numLt(j, a[..]) + numEq(j, a[
     }
 }
 
-//requires(forall j :: 0 <= j < |c| ==> exists k :: ((-1 < k < |a|) && c[j] == a[k] && j == position(key(a[k]), k, a[..], key)))
-
-
-//A key lemma: in our loop, c[b1[a]] != -1, so we do not overwrite a previously written value
-//NOTE: for default - plan is to require a default where key(default) < 0
+//A key lemma: in our loop, c[b1[key(a[i])]] == default, so we do not overwrite a previously written value
 lemma sortedArrayLoopSeesNewElt(a: array<G>, b: array<int>, c: array<G>, i : int, default : G)
 requires(a.Length == c.Length)
 requires(0 <= i < a.Length)
@@ -778,9 +699,9 @@ ensures(permutation(a[i..], filter(c, y => y != default))) {
     assert(a[i..] == [a[i]] + a[(i+1)..]);
     multiset_app([a[i]], a[i+1..]);
     seq_split(oldC, idx);
-    filter_app(oldC[..idx] + [oldC[idx]], oldC[idx + 1..], y => y != default); //we can split filter into 0..b[a[i]], the elt b[a[i]], and the rest of the list
+    filter_app(oldC[..idx] + [oldC[idx]], oldC[idx + 1..], y => y != default);
     filter_app(oldC[..idx], [oldC[idx]], y => y != default);
-    multiset_app(filter(oldC[..idx] + [oldC[idx]], y => y != default), filter(oldC[idx + 1..], y => y != default)); //we can split filter into 0..b[a[i]], the elt b[a[i]], and the rest of the list
+    multiset_app(filter(oldC[..idx] + [oldC[idx]], y => y != default), filter(oldC[idx + 1..], y => y != default));
     multiset_app(filter(oldC[..idx], y => y != default), filter([oldC[idx]], y => y != default));
     filterEmpty([oldC[idx]], y => y != default);
     assert(multiset(filter(oldC, y => y != default)) == multiset((filter(oldC[..idx], y => y != default))) +
@@ -789,7 +710,7 @@ ensures(permutation(a[i..], filter(c, y => y != default))) {
     filter_app(oldC[..idx] + [c[idx]], oldC[idx + 1..], y => y != default);
     filter_app(oldC[..idx], [c[idx]], y => y != default);
     assert(c[idx] == a[i]);
-    multiset_app(filter(oldC[..idx] + [c[idx]], y => y != default), filter(oldC[idx + 1..], y => y != default)); //we can split filter into 0..b[a[i]], the elt b[a[i]], and the rest of the list
+    multiset_app(filter(oldC[..idx] + [c[idx]], y => y != default), filter(oldC[idx + 1..], y => y != default));
     multiset_app(filter(oldC[..idx], y => y != default), filter([c[idx]], y => y != default));
     assert(multiset(a[i..]) == multiset([a[i]]) + multiset(a[i+1..]));
     assert(c[idx] == a[i]);
@@ -798,7 +719,7 @@ ensures(permutation(a[i..], filter(c, y => y != default))) {
     filterAll([c[idx]], y => y != default);
 }
 
-//The invariant that the length of the completed part of c is |a| - (i+1)
+//The invariant that the length of the completed part of c is |a| - (i+1) (actually follows from permutation invariant but it is faster if we use both and keep them separate)
 lemma filter_length_invariant(a: array<G>, c : seq<G>, oldC : seq<G>, idx : int, i : int, default : G)
 requires(0 <= i < a.Length)
 requires(a.Length == |c|)
@@ -810,12 +731,12 @@ requires(0 <= key(a[i]))
 requires (forall x :: x in a[..] ==> x != default)
 requires(|filter(oldC, y => y != default)| == a.Length - (i + 1))
 ensures(|filter(c[..], y => y != default)| == a.Length - i) {
-  assert(|filter(oldC, y => y != default)| == a.Length - (i + 1)); //assumption
+  assert(|filter(oldC, y => y != default)| == a.Length - (i + 1));
     seq_split(oldC, idx);
     assert(oldC == (oldC[..idx] + [oldC[idx]])+ oldC[idx + 1..]);
-    filter_app(oldC[..idx] + [oldC[idx]], oldC[idx + 1..], y => y != default); //we can split filter into 0..b[a[i]], the elt b[a[i]], and the rest of the list
+    filter_app(oldC[..idx] + [oldC[idx]], oldC[idx + 1..], y => y != default);
     filter_app(oldC[..idx], [oldC[idx]], y => y != default);
-    filterEmpty([oldC[idx]], y => y != default); //since c[idx] = -1
+    filterEmpty([oldC[idx]], y => y != default); //since c[idx] == default
     seq_split(c[..], idx);
     assert(c[..] == c[..idx] + [c[idx]] + c[idx+1..]);
     filter_app(oldC[..idx] + [c[idx]], oldC[idx + 1..], y => y != default);
@@ -824,7 +745,6 @@ ensures(|filter(c[..], y => y != default)| == a.Length - i) {
     assert(a[i] in a[..]);
     assert(c[idx] != default);
 }
-
 
 //The values in the b array are bounded (used for array bounds)
 lemma b_bound_invariant(a: array<G>, oldB : seq<int>, b : seq<int>, i: int, idx : int)
@@ -838,7 +758,7 @@ requires(forall j : int :: 0 <= j < |oldB| ==> oldB[j] <= numLeq(j, a[..]) - 1)
 ensures((forall j : int :: 0 <= j < |b| ==> b[j] <= numLeq(j, a[..]) - 1)){
 }
 
-//Invariant that the array "b" consists of the positions of all elements, only considering equal elements up to index i
+//Invariant that the array b consists of the positions of all elements, only considering equal elements up to index i
 lemma b_position_invariant(a:array<G>, oldB : seq<int>, b : seq<int>, i : int, idx : int)
 requires(0 <= i < a.Length)
 requires(0 <= key(a[i]) < |oldB|)
@@ -861,7 +781,7 @@ ensures(forall j :: 0 <= j < |b| ==> b[j] == position(j, i-1, a[..])) {
   }
 }
 
-//The important invariant for sorting and stability: each element c[j] corresponds to the element of k actually at position j in a sorted array
+//The important invariant for sorting and stability: each element c[j] corresponds to the element of k actually at position j in a sorted and stable array
 lemma c_structure_invariant(a: array<G>, b: seq<int>, c : seq<G>, oldC: seq<G>, idx : int, i : int, default : G)
 requires(0 <= i < a.Length)
 requires(0 <= key(a[i]) < |b|)
@@ -886,11 +806,11 @@ ensures(forall j :: 0 <= j < |c| ==> c[j] != default ==> exists k :: ((i-1 < k <
   }
 }
 
-//Prove that the invariants imply the postconditions in a separate lemma
+//Proofs that the invariants imply the postconditions in a the following lemmas
 
 //Our loop invariants imply the output is a permutation of the input
 lemma afterLoopPermutation(a: array<G>, c : array<G>, default : G)
-requires(permutation((a[0..]),(filter(c[..], y => y != default)))) //permutation invariant
+requires(permutation((a[0..]),(filter(c[..], y => y != default))))
 requires(a.Length == c.Length)
 ensures(permutation(a[..], c[..])) {
   permutation_length(a[..], (filter(c[..], y => y != default)));
@@ -908,8 +828,7 @@ requires(forall j :: 0 <= j < c.Length ==> c[j] != default ==> exists k :: ((-1 
 ensures(sorted(c[..])) {
   filter_same_length_all(c[..], y => y != default); //the filtered list is the original list
   filterAll(c[..], y => y != default);
-  all_elems_seq_array(c, y => y != default); //all elements in c satsify y >= 0
-  //all_elems_seq_array(c, y => y != default);
+  all_elems_seq_array(c, y => y != default); 
   assert(forall j :: 0 <= j  < c.Length ==> c[j] != default);
   assert(forall j :: 0 <= j < c.Length ==> exists k :: ((-1 < k < a.Length) && c[j] == a[k] && j == position(key(a[k]), k, a[..])));
   all_positions_implies_sorted(a[..], c[..]);
@@ -926,19 +845,13 @@ ensures(forall x :: x in a[..] ==> x != default) {
 
 // Proofs for stability 
 
-//(Note: because we sort using the integer values, stability is kind of meaningless, and we can in fact "prove" it using 
-// the permutation info. But we do the real proof that holds even when sorting by a specific key)
-
-//first, we need to know that at any point in the loop, for all j < b[a[i]], c[j] != a[i] - ie, the current element is the
-//first one in the current array with that value - because we go backwards, this ensures stability
+//First, we need to know that at any point in the loop, for all j < b[key(a[i])], c[j] != a[i] - ie, the current element is the
+//first one in the current array with that value - because we loop backwards, this ensures stability
 lemma all_same_elts_come_after(a: array<G>, oldC : seq<G>, i : int, ai : G, bai : int, default : G)
 requires(0 <= i < a.Length)
 requires(ai == a[i])
 requires(0 <= key(ai))
-//requires(forall x :: x in a[..] ==> x != default)
 requires(key(default) < 0)
-// /requires(0 <= ai < |b|)
-//requires(bai == b[ai])
 requires(bai == position(key(ai), i, a[..]))
 requires(0 <= bai < |oldC|)
 requires(a.Length == |oldC|)
@@ -947,7 +860,6 @@ ensures(forall j :: 0 <= j < bai ==> key(oldC[j]) != key(a[i])) {
   forall j | 0 <= j < bai
   ensures(key(oldC[j]) != key(a[i])) {
     if(key(oldC[j]) == key(a[i])) {
-      //assert(oldC[j] != default);
       var k :| ((i < k < a.Length) && oldC[j] == a[k] && j == position(key(a[k]), k, a[..]));
       assert(position(key(a[i]), k, a[..]) < position(key(a[i]), i, a[..]));
       positions_eq_preserve_order((a[..]), k, i, a[i]);
@@ -956,26 +868,12 @@ ensures(forall j :: 0 <= j < bai ==> key(oldC[j]) != key(a[i])) {
   }
 }
 
-/*
-lemma no_elts_come_before<T>(a: array<T>, oldC : seq<T>, i : int, ai : T, bai : int, default : T, key : T -> int)
-requires(0 <= i < a.Length)
-requires(ai == a[i])
-requires(0 <= key(ai))
-requires(a[i] != default)
-// /requires(0 <= ai < |b|)
-//requires(bai == b[ai])
-requires(bai == position(key(ai), i, a[..], key))
-requires(0 <= bai < |oldC|)
-requires(a.Length == |oldC|)
-requires(forall j :: 0 <= j < |oldC| ==> oldC[j] != default ==> exists k :: ((i < k < a.Length) && oldC[j] == a[k] && j == position(key(a[k]), k, a[..], key)))
-ensures(forall j :: 0 <= j < bai ==> oldC[j] != a[i]) {
-
-}*/
-
+//True for arbitrary functions but Dafny has trouble using a more generic definition
 lemma filter_filter_special(a: seq<G>, default : G, x: int)
 ensures(filter((filter(a, y => y != default)), y => key(y) == x) == filter(a, y => y != default && key(y) == x)) {
 }
 
+//The stability invariant - that the completed portion of c and a[i+1..] are stable with respect to each other. This proof is long and tedious.
 lemma stable_invariant_preserved(a: array<G>, b : seq<int>, oldC : seq<G>, c : seq<G>, i : int, ai: G, bai : int, default: G)
 requires(0 <= i < a.Length)
 requires(ai == a[i])
@@ -1010,6 +908,7 @@ ensures(forall x : int :: filter(a[i..], y => key(y) == x) == filter(filter(c, y
     assert(c[bai] == a[i]);
     assert(a[i] in a[..]);
     assert(c[bai] != default);
+
     //so now we know that (with abuse of notation):
     // filter(a[i..]) = filter(a[i]) + filter(a[i+1..])
     // filter(c) = filter(c[..b[a[i]]]) + filter(c[b[a[i]]]) + filter(c[b[a[i]] + 1..])
@@ -1024,14 +923,11 @@ ensures(forall x : int :: filter(a[i..], y => key(y) == x) == filter(filter(c, y
       filterEmpty(oldC[..b[key(a[i])]], y => (y != default && key(y) == x));
       assert(filter([c[b[key(a[i])]]], y => (y != default && key(y) == x)) == [a[i]]);
       filterEmpty([oldC[b[key(a[i])]]], y => (y != default && key(y) == x));
-      //filter_filter_special(c, x, default, key);
-      
+
       assert(filter(filter(c, y => y != default), y => key(y) == x) == filter(c, y => (y != default && key(y) == x)));
       assert(filter(c[..b[key(a[i])]], y => (y != default && key(y) == x)) == []);
       assert(c == c[..b[key(a[i])]] + [c[b[key(a[i])]]] + c[b[key(a[i])] + 1..]);
-      //assert(filter(c, y => (y >= 0 && y == x)) == filter(c[..b[a[i]]], y => (y >= 0 && y == x)) +  filter([c[b[a[i]]]], y => (y >= 0 && y == x)) + filter(c[b[a[i]] + 1..], y => (y >= 0 && y == x)));
 
-      //assert(filter(c, y => (y >= 0 && y == x)) == filter([c[b[a[i]]]], y => (y >= 0 && y == x)) + filter(c[b[a[i]] + 1..], y => (y >= 0 && y == x)));
       assert(filter(filter(c, y => y != default), y => key(y) == x) == [a[i]] + filter(c[b[key(a[i])] + 1..], y => (y != default && key(y) == x)));
 
       assert(filter(filter(oldC, y => y != default), y => key(y) == x) == filter(oldC[b[key(a[i])] + 1..], y => (y != default && key(y) == x))); 
@@ -1040,11 +936,11 @@ ensures(forall x : int :: filter(a[i..], y => key(y) == x) == filter(filter(c, y
     else {
       filterEmpty([c[b[key(a[i])]]], y => (y != default && key(y) == x));
     }
-    
   }
 }
 
 
+//Our stability invariant implies that a and c are stable after the loop is finished
 lemma afterLoopStable(a : array<G>, c : array<G>, default : G)
 requires(a.Length == c.Length)
 requires(forall x : int :: filter(a[..], y => key(y) == x) == filter(filter(c[..], y => y != default), y => key(y) == x))
@@ -1055,9 +951,8 @@ ensures(stable(a[..], c[..])) {
     assert((filter(c[..], y => y != default) == c[..]));
 }
 
-//The third (and much more complicated) loop of counting sort: put each element in its correct position 
+//Finally, the code for the loop itself. We put each element in its correct position. The invariants are much more complicated here.
 //a is the original array, b is prefix sum array 
-
 method constructSortedArray(a: array<G>, b: array<int>, default : G) returns (c : array<G>)
 requires(forall i : int {:induction i} :: 0 <= i < b.Length ==> (b[i] == numLeq(i, a[..]) - 1));
 requires(forall i : int :: 0 <= i < a.Length ==> 0 <= key(a[i]) < b.Length)
@@ -1089,35 +984,29 @@ ensures(stable(a[..], c[..]))
   
   //establish the b invariant
   constructSortedArrayBInvarEntry(a, b1, i);
-  
-  //ghost var bLen := b.Length;
-
-
 
   while(i >= 0)
   decreases (i-0)
-  
   invariant(-1 <= i < a.Length)
   invariant(b1.Length == b.Length) //need for bounds
   invariant(forall j :: 0 <= j < a.Length ==> 0 <= key(a[j]) < b1.Length); //also need for bounds
   invariant(forall j : int :: 0 <= j < b1.Length ==> b1[j] <= numLeq(j, a[..]) - 1) //used for bounds checks
+  invariant(permutation((a[(i+1)..]),(filter(c[..], y => y != default)))) //permutation invariant
   //technically, this invariant is implied by the next one (by permutation_length), but the proofs are much faster if we include both
   invariant(|filter(c[..], y => y != default)| == a.Length - (i + 1)); //ensures that we fill all of c
-  invariant(permutation((a[(i+1)..]),(filter(c[..], y => y != default)))) //permutation invariant
   invariant(forall j :: 0 <= j < b.Length ==> b1[j] == position(j, i, a[..])) //the array b at each step (b is changing)
   invariant(forall j :: 0 <= j < c.Length ==> c[j] != default ==> exists k :: ((i < k < a.Length) && c[j] == a[k] && j == position(key(a[k]), k, a[..]))) //every filled in element of c is a previously seen elt
-  invariant(forall x : int :: filter(a[(i+1)..], y => key(y) == x) == filter(filter(c[..], y => y != default), y => key(y) == x)) 
+  invariant(forall x : int :: filter(a[(i+1)..], y => key(y) == x) == filter(filter(c[..], y => y != default), y => key(y) == x)) //stability invariant
   
   {
     //make sure everything is in bounds
     assert(0 <= i < a.Length);
     var ai := key(a[i]);
     assert(0 <= ai < b1.Length);
-    //first, show that b[a[i]] is nonnegative
+    //first, show that b[key(a[i])] is nonnegative
     numEq_in_pos(a[i], a[..(i+1)]);
     assert(0 <= b1[ai]);
     //then, show that it is bounded
-    //ghost var ai := key(a[i]);
     filter_length_leq(a[..], y => key(y) <= ai);
     numLeq_direct(ai, a[..]);
     assert(0 <= b1[ai] < c.Length);
@@ -1128,71 +1017,41 @@ ensures(stable(a[..], c[..]))
     ghost var cLen := c.Length;
     var idx := b1[ai];
 
-
-
     no_default_elts(a, default);  
-    //A crucial step: show that c[b1[a[i]]] == -1, so we are actually considering a new element
+    //A crucial step: show that c[b1[key(a[i])]] == default, so we are actually considering a new element
     sortedArrayLoopSeesNewElt(a, b1, c, i, default);
     assert(c[idx] == default);
   
    
     //The actual update
     c[idx] := a[i];
-
     b1[ai] := idx - 1;
-
 
 
     //What we changed
     assert(c[..] == oldC[idx := a[i]]);
-    //assert(b1[..] == oldB[ai := idx - 1]);
     assert(b1[ai] == idx - 1);
     assert(forall j :: 0 <= j < |oldB| ==> j != ai ==> b1[j] == oldB[j]); // takes a long time
 
-
-
-    
     //re-establish invariants with auxilliary lemmas
     permutation_invariant(a, c[..], oldC, idx, i, default);
     assert(permutation((a[i..]),(filter(c[..], y => y != default)))); 
     filter_length_invariant(a, c[..], oldC, idx, i, default);
     assert(forall j : int :: 0 <= j < |oldB| ==> oldB[j] <= numLeq(j, a[..]) - 1);
-   
-
     b_position_invariant(a, oldB, b1[..], i, idx);
     assert((forall j :: 0 <= j < b.Length ==> b1[j] == position(j, i-1, a[..])));
-     b_bound_invariant(a, oldB, b1[..], i, idx);
+    b_bound_invariant(a, oldB, b1[..], i, idx);
     assert(|oldC| == cLen);
-   // assume(forall j :: 0 <= j < c.Length ==> c[j] != default ==> exists k :: ((i < k < a.Length) && c[j] == a[k] && j == position(key(a[k]), k, a[..], key))); //every filled in element of c is a previously seen elt   
-   
-      assert(forall j :: 0 <= j < |oldC| ==> oldC[j] != default ==> exists k :: ((i < k < a.Length) && oldC[j] == a[k] && j == position(key(a[k]), k, a[..])));
-
+    assert(forall j :: 0 <= j < |oldC| ==> oldC[j] != default ==> exists k :: ((i < k < a.Length) && oldC[j] == a[k] && j == position(key(a[k]), k, a[..])));
     c_structure_invariant(a, oldB, c[..], oldC, idx, i, default);   
     assert (forall j :: 0 <= j < c.Length ==> c[j] != default ==> exists k :: ((i - 1 < k < a.Length) && c[j] == a[k] && j == position(key(a[k]), k, a[..]))); 
     assert(key(default) < 0);
     stable_invariant_preserved(a, oldB, oldC, c[..], i, a[i], idx, default); 
     
-    
-    
+    //update loop counter
     i := i - 1;
-    
-    // //some of the proofs seem to go better if we tell Dafny that the invariant holds explicitly (TODO: see if we need this)
-    // assert(permutation((a[(i+1)..]),(filter(c[..], y => y != default))));
-    // assert((forall j :: 0 <= j < b.Length ==> b1[j] == position(j, i, a[..], key)));
-    // //assert(forall j :: 0 <= j < c.Length ==> c[j] != default ==> exists k :: (i < k < a.Length) && c[j] == a[k]);
-    // assert (forall j :: 0 <= j < c.Length ==> c[j] != default ==> exists k :: ((i < k < a.Length) && c[j] == a[k] && j == position(key(a[k]), k, a[..], key))); 
-
-    // assert(forall j :: 0 <= j < a.Length ==> 0 <= key(a[j]) < b1.Length); //also need for bounds
-    // assert(forall j : int :: 0 <= j < b1.Length ==> b1[j] <= numLeq(j, a[..], key) - 1); //used for bounds checks
-    // //technically, this invariant is implied by the next one (by permutation_length), but the proofs are much faster if we include both
-    // assert(|filter(c[..], y => y != default)| == a.Length - (i + 1)); //ensures that we fill all of c
-    // assert(forall x : int :: filter(a[(i+1)..], y => key(y) == x) == filter(filter(c[..], y => y != default), y => key(y) == x));
-    // assert(-1 <= i < a.Length);
-    // assert(b1.Length == b.Length); //need for bounds 
-    
   }
-  
-  //invariants => postcondition (do in different lemmas so it is faster)
+  //invariants => postcondition
   afterLoopPermutation(a, c, default);
   assert(permutation(a[..], c[..]));
   afterLoopSorted(a, c, default);
@@ -1201,7 +1060,13 @@ ensures(stable(a[..], c[..]))
   assert(stable(a[..], c[..])); 
 } 
 
-//The final algorithm
+/** The counting sort algorithm: simply calls each of the 3 loops. We require the following conditions on the input:
+  1. For every x in a, 0 <= key(x) < k - this is required for counting sort in general.
+  2. There is an element of G called default such that key(default) < 0. This is not technically required for the algorithm,
+     but it is for the proof of correctness, so that we can tell which portion of the array has been filled in so far. This is
+     a very mild condition to satsify: we can always add 1 more element to type G and assign its key to be negative (equivalently,
+     use the type (option G) instead, and set key(None) == -1, and key(Some x) == key(x)).
+ */
 method countingSort(a: array<G>, k : int, default : G) returns (s: array<G>)
 requires(0 < k)
 requires (forall i: int :: 0 <= i < a.Length ==> 0 <= key(a[i]) < k)
