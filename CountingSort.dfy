@@ -34,6 +34,12 @@ requires(forall x : T :: x in a ==> ! f(x))
 ensures(filter(a, f) == []) {
 }
 
+lemma filter_length_0<T>(a: seq<T>, f : T -> bool)
+requires(|filter(a, f)| == 0)
+ensures(forall x : T :: x in a ==> ! f(x)) {
+
+}
+
 //If we filter a list where all elements satisfy the predicate, we get the whole list
 lemma {:induction a} filterAll<T>(a: seq<T>, f : T -> bool)
 requires(forall x : T :: x in a ==> f(x))
@@ -157,6 +163,11 @@ ensures(numLeq(x,a) == numLeq(x-1, a) + numEq(x, a)) {
 lemma numEq_app(x: int, a : seq<G>, b : seq<G>)
 ensures(numEq(x, a + b) == numEq(x, a) + numEq(x,b)) {
   filter_app(a, b, y => key(y) == x);
+}
+
+lemma numLt_app(x: int, a : seq<G>, b : seq<G>)
+ensures(numLt(x, a + b) == numLt(x, a) + numLt(x, b)) {
+  filter_app(a, b, y => key(y) < x);
 }
 
 lemma numEq_singleton(x: G, y : int)
@@ -706,7 +717,8 @@ ensures(a == b) {
 
 //stability invariant implies permutation
 lemma stable_implies_permutation(a: seq<G>, b : seq<G>)
-requires(forall x : int :: filter(a, y => key(y) == x) == filter(b, y => key(y) == x))
+requires(stable(a, b))
+//requires(forall x : int :: filter(a, y => key(y) == x) == filter(b, y => key(y) == x))
 ensures(permutation(a, b)) {
   if(|a| <= 0) {
     if(|b| <= 0) {
@@ -1038,8 +1050,156 @@ ensures(stable(a[..], c[..])) {
     assert((filter(c[..], y => y != default) == c[..]));
 }
 
+//TODO move
+lemma position_zero_lt(a: seq<G>, k : int)
+requires(0 <= k < |a|)
+requires(position(key(a[k]), k, a) == 0)
+ensures(forall x :: x in a ==> !(key(x) < key(a[k]))) {
+  position_bounds(a, a[k], k);
+  var x := key(a[k]);
+  assert(numLt(x, a) == 0);
+  filter_length_0(a, y => key(y) < x);
+
+}
+
+lemma position_zero_eq(a: seq<G>, k : int)
+requires(0 <= k < |a|)
+requires(position(key(a[k]), k, a) == 0)
+ensures(forall x :: x in a[..k] ==> key(x) != key(a[k])) {
+  position_bounds(a, a[k], k);
+  var x := key(a[k]);
+  assert(numLt(x, a) == 0);
+  assert(numEq(x, a[..k+1]) == 1);
+  assert(a[..k+1] == a[..k] + [a[k]]);
+  numEq_app(x, a[..k], [a[k]]);
+  assert(numEq(x, a[..k]) == 0);
+  filter_length_0(a[..k], y => key(y) == x);
+}
+
+//TODO: move this
+lemma c_structure_implies_stable(a : seq<G>, c : seq<G>)
+requires(forall j :: 0 <= j < |c| ==> exists k :: ((0 <= k < |a|) && c[j] == a[k] && j == position(key(a[k]), k, a[..])))
+requires(|a| == |c|)
+ensures(stable(a, c)) {
+  if (|c| <= 0) {}
+  else {
+    var k :| (0 <= k < |a| && c[0] == a[k] && 0 == position(key(a[k]), k, a));
+    //proof idea: split c into c[0] and c[1..] and a into a[..k] + a[k] + a[k+1..], apply IH on c[1..] and a[..k] + a[k+1..]. It requires a LOT of work
+    //to prove that the preconditions hold for the IH, which is what we do now
+    var c' := c[1..];
+    var a' := a[..k] + a[k+1..];
+    forall j1 | 0 <= j1 < |c'|
+    ensures(exists k2 :: 0 <= k2 < |a'| && c'[j1] == a'[k2] && j1 == position(key(a'[k2]), k2, a')) {
+      //we work with an arbitrary j1
+      assert(0 <= j1 < |c| - 1);
+      var j2 := j1 + 1;
+      assert(1 <= j2 < |c|);
+      //use assumption to get corresponding k1 for this j2 - we will need to transform the result since c and a have changed
+      var k1 :| (0 <= k1 < |a| && c[j2] == a[k1] && j2 == position(key(a[k1]), k1, a));
+      assert(c[j2] == c'[j1]);
+      //consider cases:
+      if(k1 == k) {
+        //may not need to do this nice
+      }
+      else if(k1 < k) {
+        var k2 := k1;
+        assert(a'[k2] == a[k1]);
+        assert(0 <= k2 < |a| - 1);
+        assert (j1 + 1 == position(key(a'[k2]), k2, a));
+        //The only piece we need to show is that position(key(a'[k2]), k2, a) == position(key(a'[k2]), k2, a') + 1
+        if(key(a[k]) < key(a[k1])) {
+          //this means that a[k] appears before a[k1] in the sorted array, so we are fine. It's a bit tedious to show
+          var ky := key(a'[k2]);
+          assert(a[..k2+1] == a'[..k2 + 1]); //so the second terms are equal
+          assert(a == (a[..k] + [a[k]]) + a[k+1..]);
+          filter_app(a[..k] + [a[k]], a[k+1..], y => key(y) < ky);
+          filter_app(a[..k], [a[k]], y => key(y) < ky);
+          filterAll([a[k]], y => key(y) < ky);
+          filter_app(a[..k], a[k+1..], y => key(y) < ky);
+          assert (position(ky, k2, a) == position(ky, k2, a') + 1);
+        }
+        else if(key(a[k]) > key(a[k1])) {
+          //this means that there is an element with a smaller key than k, which is a problem, since its position is 0
+          position_zero_lt(a, k);
+        }
+        else {
+          //if the keys are equal, then, there is an element with the same key as k that occurs before it, again a problem bc its position is 0
+          position_zero_eq(a, k);
+        }
+      }
+      else {
+        //case when k < k1 - so we are in the second part of the array
+        var k2 := k1 - 1;
+        assert(0 <= k2 < |a| - 1);
+        assert(a[k1] == a'[k2]);
+        assert(c'[j1] == a'[k2]);
+        assert(j1 + 1 == position(key(a[k1]), k1, a));
+        //we want to show, similarly, that position(key(a[k1]), k1, a) == position(key(a'[k2]), k2, a') + 1
+        if(key(a[k]) <= key(a[k1])) {
+          var ky := key(a[k1]);
+          //we need to split the array so we can reason about the missing element in a'
+          assert(a == (a[..k] + [a[k]]) + a[k+1..]);
+          assert(a' == a[..k] + a[k+1..]);
+          numLt_app(ky, a[..k] + [a[k]], a[k+1..]);
+          numLt_app(ky, a[..k], [a[k]]);
+          numLt_app(ky, a[..k], a[k+1..]);
+          assert(numLt(ky, a') + numLt(ky, [a[k]]) == numLt(ky, a));
+          assert(a'[..k1] == a[..k] + a[k+1..k1 + 1]);
+          assert(a[..k1 + 1] == (a[..k] + [a[k]]) + a[k+1..k1+1]);
+          numEq_app(ky, a[..k], a[k+1..k1+1]);
+          numEq_app(ky, a[..k] + [a[k]], a[k+1..k1+1]);
+          numEq_app(ky, a[..k], [a[k]]);
+          assert(numEq(ky, a[..k1+1]) == numEq(ky, a'[..k1]) + numEq(ky, [a[k]]));
+          if(key(a[k]) < key(a[k1])) {
+            filterAll([a[k]], y => key(y) < ky);
+            assert(numLt(ky, [a[k]]) == 1);
+            filterEmpty([a[k]], y => key(y) == ky);
+            assert(numEq(ky, [a[k]]) == 0);
+          }
+          else {
+            filterAll([a[k]], y => key(y) == ky);
+            assert(numEq(ky, [a[k]]) == 1);
+            filterEmpty([a[k]], y => key(y) < ky);
+            assert(numLt(ky, [a[k]]) == 0);
+          }
+        }
+        else {
+          position_zero_lt(a, k);
+        }
+      }
+    }
+    assert((forall j :: 0 <= j < |c'| ==> exists k :: ((0 <= k < |a'|) && c'[j] == a'[k] && j == position(key(a'[k]), k, a'[..]))));
+    c_structure_implies_stable(a', c'); //now, finally, we can apply the IH
+    assert(forall x :: filter(a', y => key(y) == x) == filter(c', y => key(y) == x));
+    //prove the stability result
+    forall x
+    ensures(filter(a, y => key(y) == x) == filter(c, y => key(y) == x)) {
+      assert(filter(a', y => key(y) == x) == filter(c', y => key(y) == x));
+      filter_app(a[..k], a[k+1..], y => key(y) == x);
+      assert(filter(c[1..], y => key(y) == x) == filter(a[..k], y => key(y) == x) + filter(a[k+1..], y => key(y) == x));
+      assert(c == [c[0]] + c');
+      filter_app([c[0]], c', y => key(y) == x);
+      assert(a == (a[..k] + [a[k]]) + a[k+1..]);
+      filter_app(a[..k] + [a[k]], a[k+1..], y => key(y) == x);
+      filter_app(a[..k], [a[k]], y => key(y) == x);
+      if(x == key(c[0])) {
+        //no elements in a[..k] have key = key(a[k])
+        position_zero_eq(a, k);
+        filterEmpty(a[..k], y => key(y) == x);
+        filterAll([a[k]], y => key(y) == x);
+        filterAll([c[0]], y => key(y) == x);
+      }
+      else {
+        filterEmpty([a[k]], y => key(y) == x);
+        filterEmpty([c[0]], y => key(y) == x);
+      }
+    }
+  }
+}
+
 //Finally, the code for the loop itself. We put each element in its correct position. The invariants are much more complicated here.
 //a is the original array, b is prefix sum array 
+
 method constructSortedArray(a: array<G>, b: array<int>, default : G) returns (c : array<G>)
 requires(forall i : int {:induction i} :: 0 <= i < b.Length ==> (b[i] == numLeq(i, a[..]) - 1));
 requires(forall i : int :: 0 <= i < a.Length ==> 0 <= key(a[i]) < b.Length)
@@ -1083,7 +1243,7 @@ ensures(stable(a[..], c[..]))
   invariant(|filter(c[..], y => y != default)| == a.Length - (i + 1)); //ensures that we fill all of c
   invariant(forall j :: 0 <= j < b.Length ==> b1[j] == position(j, i, a[..])) //the array b at each step (b is changing)
   invariant(forall j :: 0 <= j < c.Length ==> c[j] != default ==> exists k :: ((i < k < a.Length) && c[j] == a[k] && j == position(key(a[k]), k, a[..]))) //every filled in element of c is a previously seen elt
-  invariant(forall x : int :: filter(a[(i+1)..], y => key(y) == x) == filter(filter(c[..], y => y != default), y => key(y) == x)) //stability invariant
+  //invariant(forall x : int :: filter(a[(i+1)..], y => key(y) == x) == filter(filter(c[..], y => y != default), y => key(y) == x)) //stability invariant
   
   {
     //make sure everything is in bounds
@@ -1132,8 +1292,8 @@ ensures(stable(a[..], c[..]))
     assert(forall j :: 0 <= j < |oldC| ==> oldC[j] != default ==> exists k :: ((i < k < a.Length) && oldC[j] == a[k] && j == position(key(a[k]), k, a[..])));
     c_structure_invariant(a, oldB, c[..], oldC, idx, i, default);   
     assert (forall j :: 0 <= j < c.Length ==> c[j] != default ==> exists k :: ((i - 1 < k < a.Length) && c[j] == a[k] && j == position(key(a[k]), k, a[..]))); 
-    assert(key(default) < 0);
-    stable_invariant_preserved(a, oldB, oldC, c[..], i, a[i], idx, default); 
+    //assert(key(default) < 0);
+    //stable_invariant_preserved(a, oldB, oldC, c[..], i, a[i], idx, default); 
     
     //update loop counter
     i := i - 1;
@@ -1144,15 +1304,16 @@ ensures(stable(a[..], c[..]))
   //assert(permutation(a[..], c[..]));
   
   //requires(|filter(c[..], y => y != default)| == a.Length)
-  
-  
-  afterLoopStable(a, c, default);
-  assert(stable(a[..], c[..])); 
-  stable_implies_permutation(a[..], c[..]);
-  assert(permutation(a[..], c[..]));
   filter_same_length_all(c[..], y => y != default);
   filterAll(c[..], y => y != default);
-  permutation_length(a[..], filter(c[..], y => y != default));
+  c_structure_implies_stable(a[..], c[..]);
+  
+  //afterLoopStable(a, c, default);
+  //assert(stable(a[..], c[..])); 
+  stable_implies_permutation(a[..], c[..]);
+  assert(permutation(a[..], c[..]));
+  
+  //permutation_length(a[..], filter(c[..], y => y != default));
   afterLoopSorted(a, c, default);
   assert(sorted(c[..]));
   
@@ -1165,6 +1326,7 @@ ensures(stable(a[..], c[..]))
      a very mild condition to satsify: we can always add 1 more element to type G and assign its key to be negative (equivalently,
      use the type (option G) instead, and set key(None) == -1, and key(Some x) == key(x)).
  */
+ /*
 method countingSort(a: array<G>, k : int, default : G) returns (s: array<G>)
 requires(0 < k)
 requires (forall i: int :: 0 <= i < a.Length ==> 0 <= key(a[i]) < k)
