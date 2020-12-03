@@ -1237,7 +1237,7 @@ ensures(stable(a[..], c[..]))
   decreases (i-0)
   invariant(-1 <= i < a.Length)
   invariant(forall j :: 0 <= j < a.Length ==> 0 <= key(a[j]) < b1.Length); //also need for bounds
-  invariant(forall j : int :: 0 <= j < b1.Length ==> b1[j] <= numLeq(j, a[..]) - 1) //used for bounds checks
+  //invariant(forall j : int :: 0 <= j < b1.Length ==> b1[j] <= numLeq(j, a[..]) - 1) //used for bounds checks
   //invariant(permutation((a[(i+1)..]),(filter(c[..], y => y != default)))) //permutation invariant
   //technically, this invariant is implied by the next one (by permutation_length), but the proofs are much faster if we include both
   invariant(|filter(c[..], y => y != default)| == a.Length - (i + 1)); //ensures that we fill all of c
@@ -1256,6 +1256,7 @@ ensures(stable(a[..], c[..]))
     //then, show that it is bounded
     filter_length_leq(a[..], y => key(y) <= ai);
     numLeq_direct(ai, a[..]);
+    position_bounds(a[..], a[i], i);
     assert(0 <= b1[ai] < c.Length);
   
     //ghost variables to refer to the old values of variables
@@ -1284,10 +1285,10 @@ ensures(stable(a[..], c[..]))
     //permutation_invariant(a, c[..], oldC, idx, i, default);
     //assert(permutation((a[i..]),(filter(c[..], y => y != default)))); 
     filter_length_invariant(a, c[..], oldC, idx, i, default);
-    assert(forall j : int :: 0 <= j < |oldB| ==> oldB[j] <= numLeq(j, a[..]) - 1);
+    //assert(forall j : int :: 0 <= j < |oldB| ==> oldB[j] <= numLeq(j, a[..]) - 1);
     b_position_invariant(a, oldB, b1[..], i, idx);
     assert((forall j :: 0 <= j < b.Length ==> b1[j] == position(j, i-1, a[..])));
-    b_bound_invariant(a, oldB, b1[..], i, idx);
+    //b_bound_invariant(a, oldB, b1[..], i, idx);
     assert(|oldC| == cLen);
     assert(forall j :: 0 <= j < |oldC| ==> oldC[j] != default ==> exists k :: ((i < k < a.Length) && oldC[j] == a[k] && j == position(key(a[k]), k, a[..])));
     c_structure_invariant(a, oldB, c[..], oldC, idx, i, default);   
@@ -1317,6 +1318,7 @@ ensures(stable(a[..], c[..]))
   afterLoopSorted(a, c, default);
   assert(sorted(c[..]));
   
+  
 } 
 
 /** The counting sort algorithm: simply calls each of the 3 loops. We require the following conditions on the input:
@@ -1326,7 +1328,7 @@ ensures(stable(a[..], c[..]))
      a very mild condition to satsify: we can always add 1 more element to type G and assign its key to be negative (equivalently,
      use the type (option G) instead, and set key(None) == -1, and key(Some x) == key(x)).
  */
- /*
+ 
 method countingSort(a: array<G>, k : int, default : G) returns (s: array<G>)
 requires(0 < k)
 requires (forall i: int :: 0 <= i < a.Length ==> 0 <= key(a[i]) < k)
