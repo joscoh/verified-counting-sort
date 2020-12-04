@@ -79,7 +79,7 @@ All invariants hold before the third loop.
 \end{lemma}
 \begin{proof}
 Since $i= a.Length - 1$, $a[i+1..a.Length]$ is empty, as is $c_i$. Thus, the only nontrivial invariant is invariant 2.
-\\Since $i=a.Length - 1$, $position(j, i, a) = numLt(j, a) + numEq(j, a[0..a.Length]) - 1 = numLt(j, a) + numEq(j, a) - 1 = numEq(j,a) - 1$. This is true by Lemma 2.
+\\Since $i=a.Length - 1$, $position(j, i, a) = numLt(j, a) + numEq(j, a[0..a.Length]) - 1 = numLt(j, a) + numEq(j, a) - 1 = numLeq(j,a) - 1$. This is true by Lemma 2.
 \end{proof}
 Now, we will prove that each invariant is preserved during the loop by first proving the following lemmas:
 \begin{lemma}
@@ -92,7 +92,7 @@ Suppose not. We consider 2 cases:
 If $key(a[i]) = key(a[j])$, let $k = key(a[i])$. Then 
 \begin{align*}
 position(key(a[i]), i, a) = numLt(k, a) + numEq(k, a[0..i+1] - 1 \\
-position(key(a[j]), j, a) = numLt(k, a) + numEq(k, a[0..j+1])
+position(key(a[j]), j, a) = numLt(k, a) + numEq(k, a[0..j+1]) - 1
 \end{align*}
 WLOG, suppose $i < j$. Then $numEq(k, a[0..i+1]) + numEq(k, a[i+1..j+1]) = numEq(k, a[0..j+1])$. Since $i < j$ and $a[j] = k$, $numEq(k, a[i+1..j+1]) > 0$. This contradicts the fact that the positions were equal.
 \item
@@ -104,7 +104,7 @@ numLt(key(a[j]), a) \leq position(key(a[j]), j, a)
 Note that we can write $numLt(key(a[j]), a) = numLeq(key(a[j]) - 1, a)$ (since we are working with integers). Now $key(a[i]) \leq key(a[j]) - 1$, so 
 \begin{align*}
 position(key(a[i]), i, a) &\leq numLeq(key(a[i]), a) - 1  \\
-&\leq numLeq(key(a[j] - 1), a) - 1 \\
+&\leq numLeq(key(a[j]) - 1, a) - 1 \\
 &= numLt(key(a[j]), a) - 1 \\
 &< numLt(key(a[j]), a) \\
 &\leq position(key(a[j]), j, a)
@@ -113,7 +113,7 @@ This again contradicts the position equality.
 \end{enumerate}
 \end{proof}
 \begin{lemma}
-At the beginning of each iteration of the loop, $c[b[(key(a[i])]]$ has not yet been filled in.
+At the beginning of each iteration of the loop, $c[b[key(a[i])]]$ has not yet been filled in.
 \end{lemma}
 \begin{proof}
 Suppose it had, then by invariant 3, there is some $k$ such that $i < k < a.Length$, $c_i[b[key(a[i])]] = a[k]$, and $b[key(a[i])] = position(key(a[k]), k, a)$. But by invariant $2$, $b[key(a[i])] = position(key(a[i]), i, a)$. By Lemma 4, then, $i = k$, a contradiction.
@@ -122,7 +122,7 @@ Suppose it had, then by invariant 3, there is some $k$ such that $i < k < a.Leng
 At the beginning of each iteration of the loop, for all $0 \leq j < b[key(a[i])]$, if $c_i[j]$ exists (ie, position $j$ has been filled), then $key(c_i[j]) \neq key(a[i])$. In other words, we fill in all the values with $key = key(a[i])$ from right to left.
 \end{lemma}
 \begin{proof}
-Suppose not, so there is some $j < b[key(a[i])]$ where $key(c_i[j]) = key(a[i])$. By invariant 3, there is some $k$ with $i < k < a.Length$, $c_i[j] = a[k]$, and $j = position(key(a[k]), k, a)$. By assumption, $key(a[k]) = key(a[i])$. By invariant 2, $b[key(a[i])] = position(key(a[i]), i, a)$. Thus, we get that $position(key(a[i]), k, a) < position(key(a[i]), i, a)$. Since $i< k$, this is a contradiction (ie, we cannot decrase the number of equal elements in the array by extending the range we are considering).
+Suppose not, so there is some $j < b[key(a[i])]$ where $key(c_i[j]) = key(a[i])$. By invariant 3, there is some $k$ with $i < k < a.Length$, $c_i[j] = a[k]$, and $j = position(key(a[k]), k, a)$. By assumption, $key(a[k]) = key(a[i])$. By invariant 2, $b[key(a[i])] = position(key(a[i]), i, a)$. Thus, we get that $position(key(a[i]), k, a) < position(key(a[i]), i, a)$. Since $i< k$, this is a contradiction (ie, we cannot decrease the number of equal elements in the array by extending the range we are considering).
 \end{proof}
 Now, we can prove that each invariant is preserved.
 \begin{lemma}
@@ -130,7 +130,7 @@ Each invariant is preserved by the body of the third loop.
 \end{lemma}
 \begin{proof}
 Let $b_{old}$ represent $b$ at the beginning of the current iteration of the loop, and $b_{new}$ represent $b$ after the body of the loop.
-\\By Lemma 5, $c_{i-1}$ is the same as $c_i$, except that we fill in $c_{i-1}[b_{old}[key(a[i])]]$ with $a[i]$. All other positions are the same. Also note that $a[i..a.Length]$ is just $a[i+1..a.Length]$ with $a[i]$ added at beginning. Finally, $b_{new}$ is the same as $b_{old}$ except that  the only change to $b$ is that $b_new[key(a[i])] = b_old(key(a[i])] - 1$.
+\\By Lemma 5, $c_{i-1}$ is the same as $c_i$, except that we fill in $c_{i-1}[b_{old}[key(a[i])]]$ with $a[i]$. All other positions are the same. Also note that $a[i..a.Length]$ is just $a[i+1..a.Length]$ with $a[i]$ added at beginning. Finally, $b_{new}$ is the same as $b_{old}$ except that  the only change to $b$ is that $b_{new}[key(a[i])] = b_{old}(key(a[i])] - 1$.
 \begin{enumerate}
 \item
 By above, we add $a[i]$ to both sides, so they are still permutations of each other.
@@ -138,7 +138,7 @@ By above, we add $a[i]$ to both sides, so they are still permutations of each ot
 We consider 2 cases:
 \begin{enumerate}
 \item
-If $j=key(a[i])$, then $b_{new}[j] = b_{old}[j] -1 - position(j, i, a) - 1$. But $position(j, i-1, a) = position(j, i a) - 1$, since $key(a[i])$ appears at position $a[i]$.
+If $j=key(a[i])$, then $b_{new}[j] = b_{old}[j] -1 = position(j, i, a) - 1$. But $position(j, i-1, a) = position(j, i, a) - 1$, since $key(a[i])$ appears at position $a[i]$.
 \item
 If $j \neq key(a[i])$, then $position(j, i, a) = position(j, i-1, a)$, since the number of equal keys in the given range did not change; we just removed an unequal element.
 \end{enumerate}
@@ -147,7 +147,7 @@ Thus, invariant 2 is preserved.
 For all $j\neq key(a[i])$, the claim follows from the invariant. If $j=b_{old}[key(a[i])]$, we have $i-1 < i < a.Length$, $c_{i-1}[j] = a[i]$, and by invariant 2, $j = position(key(a[i]), i, a)$, proving the claim.
 \item
 If $x\neq key(a[i])$, then, since we added $a[i]$ to both sides, we did not change anything with respect to stability, so the claim continues to hold.
-\\If $x = key(a[i])$, then by Lemma 6, there were no elements with equal keys before index $b_old[key(a[i])]$, so we added $a[i]$ to the beginning of the filtered list. Thus, if we consider the list of elements with $key=key(a[i])$ in $c_i$, we have added $a[i]$ before all of the others. Likewise, we added $a[i]$ to the beginning of $a[i+1..a.Length]$, so the claim holds.
+\\If $x = key(a[i])$, then by Lemma 6, there were no elements with equal keys before index $b_{old}[key(a[i])]$, so we added $a[i]$ to the beginning of the filtered list. Thus, if we consider the list of elements with $key=key(a[i])$ in $c_i$, we have added $a[i]$ before all of the others. Likewise, we added $a[i]$ to the beginning of $a[i+1..a.Length]$, so the claim holds.
 \end{enumerate}
 \end{proof}
 Therefore, we know that, once the third loop exits, the following are true (define $c_{ret} := c_{-1}$ - the array $c$ when the loop exits):
@@ -169,7 +169,7 @@ All that remains is to prove that the above condition implies sortedness. We do 
 $c_{ret}$ is sorted.
 \end{theorem}
 \begin{proof}
-We prove this in two parts: first, we claim that, for every $0 \leq j < c_{ret}.Length$, $numLt(key(c_{ret}[j]), c_{ret}) \leq numLeq(key(c_{ret}[j]), c_{ret}) - 1$.
+We prove this in two parts: first, we claim that, for every $0 \leq j < c_{ret}.Length$, \\$numLt(key(c_{ret}[j]), c_{ret})\leq j \leq numLeq(key(c_{ret}[j]), c_{ret}) - 1$.
 \\To prove this, we consider the $k$ such that $0 \leq k < a.Length$, $c_{ret}[j] = a[k]$, and $j = position(key(a[k]), k, a)$.
 \\Let $x = key(a[k]) = key(c_{ret}[j])$. Again, we know that:
 \begin{align*}
@@ -187,7 +187,7 @@ which is what we wanted to show.
 \begin{align*}
 j &\leq numLeq(key(c_{ret}[j]), c_{ret}) - 1 \\
 &< numLeq(key(c_{ret}[j]), c_{ret}) \\
-&\leq numLeq(key(c_{ret}[i] - 1), c_{ret}) \\
+&\leq numLeq(key(c_{ret}[i]) - 1, c_{ret}) \\
 &= numLt(key(c_{ret}[i]), c_{ret}) \\
 &\leq i
 \end{align*}
