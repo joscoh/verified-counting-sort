@@ -627,15 +627,15 @@ abstract module Count {
   requires 0 < a.Length
   requires 0 < k
   requires (forall i: int :: 0 <= i < a.Length ==> 0 <= key(a[i]) < k)
-  ensures (b.Length == k + 1)
-  ensures(forall i : int :: 0 <= i <= k ==> b[i] == numEq(i, a[..]))
+  ensures (b.Length == k)
+  ensures(forall i : int :: 0 <= i < k ==> b[i] == numEq(i, a[..]))
   {
-    b := new int[k+1](i => 0);
+    b := new int[k](i => 0);
     var i := 0;
     while(i < a.Length) 
     decreases(a.Length - i)
     invariant (0 <= i <= a.Length)
-    invariant(forall j : int :: 0 <= j <= k ==> b[j] == numEq(j, a[..i])) {
+    invariant(forall j : int :: 0 <= j < k ==> b[j] == numEq(j, a[..i])) {
       ghost var oldB := b[..];
       ghost var ai := key(a[i]);
       b[key(a[i])] := b[key(a[i])] + 1;
@@ -644,7 +644,7 @@ abstract module Count {
       countOccurrencesInvariant(a, oldB, b[..], i, key(a[i]));
 
       i := i + 1;
-      assert(forall j : int :: 0 <= j <= k ==> b[j] == numEq(j, a[..i])); //for some reason, need this for it to verify
+      assert(forall j : int :: 0 <= j < k ==> b[j] == numEq(j, a[..i])); //for some reason, need this for it to verify
     }
     assert(a[..i] == a[..]);
   }
